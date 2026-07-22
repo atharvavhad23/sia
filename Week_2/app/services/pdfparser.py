@@ -15,6 +15,9 @@ class PDFParserService:
                 if doc.needs_pass:
                     logger.warning(f"PDF requires password: {file_path}")
                     raise ValueError("Password-protected PDF")
+                if doc.page_count == 0:
+                    logger.warning(f"PDF has 0 pages: {file_path}")
+                    raise ValueError("PDF has 0 pages")
         except fitz.FileDataError:
             logger.error(f"Corrupted PDF file: {file_path}")
             raise ValueError("Corrupted or unreadable PDF")
@@ -74,19 +77,8 @@ class PDFParserService:
         }
 
     @staticmethod
-    def extract_hybrid_text(file_path: str) -> Dict[str, Any]:
-        """
-        Hybrid Approach: 
-        Uses Camelot to extract highly accurate tables and PyMuPDF for blazing fast text extraction.
-        """
-        logger.info(f"Starting 'hybrid' extraction for {file_path}")
-        PDFParserService._validate_pdf(file_path)
-        
-        metadata = {}
-        text_content = []
+    def _extract_tables_camelot(file_path: str):
         tables_data = []
-        
-        # 1. Extract tables with Camelot
         try:
             import camelot
             tables = camelot.read_pdf(file_path, pages='all', flavor='stream', suppress_stdout=True)
@@ -96,10 +88,14 @@ class PDFParserService:
                     "page": table.page,
                     "data": table.df.fillna("").to_dict(orient="records")
                 })
-        except Exception:
-            pass # No tables found or missing dependencies
-            
-        # 2. Extract fast text with PyMuPDF
+        except Exception as e:
+            logger.warning(f"Camelot table extraction failed or no tables found: {e}")
+        return tables_data
+
+    @staticmethod
+    def _extract_text_pymupdf(file_path: str):
+        metadata = {}
+        text_content = []
         with fitz.open(file_path) as doc:
             metadata = doc.metadata
             for page_num, page in enumerate(doc):
@@ -107,6 +103,26 @@ class PDFParserService:
                     "page": page_num + 1,
                     "text": page.get_text().strip()
                 })
+        return metadata, text_content
+
+    @staticmethod
+    def extract_hybrid_text(file_path: str) -> Dict[str, Any]:
+        """
+        Hybrid Approach: 
+        Uses Camelot to extract highly accurate tables and PyMuPDF for blazing fast text extraction.
+        Runs in parallel (ThreadPoolExecutor) to massively optimize latency.
+        """
+        logger.info(f"Starting parallel 'hybrid' extraction for {file_path}")
+        PDFParserService._validate_pdf(file_path)
+        
+        import concurrent.futures
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_tables = executor.submit(PDFParserService._extract_tables_camelot, file_path)
+            future_text = executor.submit(PDFParserService._extract_text_pymupdf, file_path)
+            
+            tables_data = future_tables.result()
+            metadata, text_content = future_text.result()
                 
         return {
             "engine": "hybrid_camelot_pymupdf",

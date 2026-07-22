@@ -138,8 +138,19 @@ async def extract_pdf(
     import uuid
     safe_filename = f"{uuid.uuid4()}.pdf"
     temp_file_path = os.path.join(TEMP_DIR, safe_filename)
+    
+    file_bytes = await file.read()
+    
+    if len(file_bytes) == 0:
+        logger.warning(f"0-byte file uploaded: {file.filename}")
+        return JSONResponse(status_code=400, content={"success": False, "error": "Empty File", "details": "The uploaded file is empty."})
+        
+    if not file_bytes.startswith(b"%PDF-"):
+        logger.warning(f"File signature mismatch: {file.filename}")
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid File Signature", "details": "The uploaded file is not a valid PDF document."})
+
     with open(temp_file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(file_bytes)
         
     try:
         # 3. Route to proper extraction method
