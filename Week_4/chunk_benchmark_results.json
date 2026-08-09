@@ -1,0 +1,137 @@
+[
+  {
+    "strategy": "fixed",
+    "file": "q3_report.pdf",
+    "chunk_count": 67,
+    "avg_tokens": 264.01,
+    "median_tokens": 290,
+    "std_dev": 169.98,
+    "boundary_violation_rate_pct": 5.97,
+    "time_sec": 0.039
+  },
+  {
+    "strategy": "recursive",
+    "file": "q3_report.pdf",
+    "error": "maximum recursion depth exceeded"
+  },
+  {
+    "strategy": "layout_aware",
+    "file": "q3_report.pdf",
+    "chunk_count": 59,
+    "avg_tokens": 294.83,
+    "median_tokens": 326,
+    "std_dev": 174.31,
+    "boundary_violation_rate_pct": 3.39,
+    "time_sec": 0.0182
+  },
+  {
+    "strategy": "fixed",
+    "file": "04_Atharva_9.pdf",
+    "chunk_count": 4,
+    "avg_tokens": 199.5,
+    "median_tokens": 142.5,
+    "std_dev": 194.46,
+    "boundary_violation_rate_pct": 0.0,
+    "time_sec": 0.002
+  },
+  {
+    "strategy": "recursive",
+    "file": "04_Atharva_9.pdf",
+    "error": "maximum recursion depth exceeded"
+  },
+  {
+    "strategy": "layout_aware",
+    "file": "04_Atharva_9.pdf",
+    "chunk_count": 3,
+    "avg_tokens": 254.67,
+    "median_tokens": 251,
+    "std_dev": 195.57,
+    "boundary_violation_rate_pct": 0.0,
+    "time_sec": 0.0015
+  },
+  {
+    "strategy": "fixed",
+    "file": "nda_contract.pdf",
+    "chunk_count": 4,
+    "avg_tokens": 291.5,
+    "median_tokens": 324.5,
+    "std_dev": 208.26,
+    "boundary_violation_rate_pct": 25.0,
+    "time_sec": 0.0024
+  },
+  {
+    "strategy": "recursive",
+    "file": "nda_contract.pdf",
+    "error": "maximum recursion depth exceeded"
+  },
+  {
+    "strategy": "layout_aware",
+    "file": "nda_contract.pdf",
+    "chunk_count": 2,
+    "avg_tokens": 555.5,
+    "median_tokens": 555.5,
+    "std_dev": 88.5,
+    "boundary_violation_rate_pct": 0.0,
+    "time_sec": 0.0019
+  },
+  {
+    "strategy": "fixed",
+    "file": "invoice_scan.pdf",
+    "chunk_count": 0,
+    "avg_tokens": 0,
+    "median_tokens": 0,
+    "std_dev": 0,
+    "boundary_violation_rate_pct": 0,
+    "time_sec": 0.0006
+  },
+  {
+    "strategy": "recursive",
+    "file": "invoice_scan.pdf",
+    "chunk_count": 0,
+    "avg_tokens": 0,
+    "median_tokens": 0,
+    "std_dev": 0,
+    "boundary_violation_rate_pct": 0,
+    "time_sec": 0.0006
+  },
+  {
+    "strategy": "layout_aware",
+    "file": "invoice_scan.pdf",
+    "chunk_count": 0,
+    "avg_tokens": 0,
+    "median_tokens": 0,
+    "std_dev": 0,
+    "boundary_violation_rate_pct": 0,
+    "time_sec": 0.0004
+  },
+  {
+    "strategy": "semantic",
+    "file": "q3_report.pdf",
+    "chunk_count": 502,
+    "avg_tokens": 31.83,
+    "median_tokens": 23.0,
+    "std_dev": 28.03,
+    "boundary_violation_rate_pct": 23.11,
+    "time_sec": 54.9259
+  },
+  {
+    "strategy": "semantic",
+    "file": "04_Atharva_9.pdf",
+    "chunk_count": 28,
+    "avg_tokens": 23.57,
+    "median_tokens": 17.0,
+    "std_dev": 19.29,
+    "boundary_violation_rate_pct": 28.57,
+    "time_sec": 0.6908
+  },
+  {
+    "strategy": "semantic",
+    "file": "nda_contract.pdf",
+    "chunk_count": 27,
+    "avg_tokens": 38.3,
+    "median_tokens": 28,
+    "std_dev": 35.03,
+    "boundary_violation_rate_pct": 22.22,
+    "time_sec": 1.9978
+  }
+]
