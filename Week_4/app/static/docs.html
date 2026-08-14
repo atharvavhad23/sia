@@ -282,7 +282,7 @@
     <div class="logo-icon">🔬</div>
     <div>
       <div class="logo-text">SIA Utilities</div>
-      <div class="logo-version">v2.0.0 · Production</div>
+      <div class="logo-version">v3.0.0 · RAG Pipeline</div>
     </div>
   </div>
 
@@ -296,9 +296,23 @@
     <span class="method-badge post">POST</span> Extract PDF
   </a>
 
+  <div class="nav-label" style="margin-top:16px;">RAG Pipeline ✨</div>
+  <a href="#ingest" class="nav-item">
+    <span class="method-badge post">POST</span> Ingest PDF
+  </a>
+  <a href="#query" class="nav-item">
+    <span class="method-badge post">POST</span> Query Store
+  </a>
+
   <div class="nav-label" style="margin-top:16px;">Try It</div>
   <a href="#try" class="nav-item">
-    <span style="font-size:14px;">⚡</span> Live Tester
+    <span style="font-size:14px;">⚡</span> Extract Tester
+  </a>
+  <a href="#try-ingest" class="nav-item">
+    <span style="font-size:14px;">📥</span> Ingest Tester
+  </a>
+  <a href="#try-query" class="nav-item">
+    <span style="font-size:14px;">🔍</span> Query Tester
   </a>
 
   <div class="nav-label" style="margin-top:16px;">Reference</div>
@@ -315,14 +329,14 @@
 
   <!-- HERO -->
   <div class="hero">
-    <div class="hero-badge"><span></span> API Online · v2.0.0</div>
-    <h1>SIA PDF <span>Extraction Engine</span></h1>
-    <p>Enterprise-grade microservice for converting complex PDFs into structured, AI-ready data blocks for Vector DB ingestion and LLM consumption.</p>
+    <div class="hero-badge"><span></span> API Online · v3.0.0 · RAG Pipeline</div>
+    <h1>SIA PDF <span>Extraction + RAG Engine</span></h1>
+    <p>Enterprise-grade microservice for converting complex PDFs into structured, AI-ready vector embeddings. Supports 4 chunking strategies, 3 embedding models, FAISS vector store, and semantic retrieval.</p>
     <div class="hero-stats">
       <div class="stat"><div class="stat-val">3</div><div class="stat-lab">Extraction Engines</div></div>
-      <div class="stat"><div class="stat-val">~2.7s</div><div class="stat-lab">Hybrid Latency</div></div>
-      <div class="stat"><div class="stat-val">100%</div><div class="stat-lab">Test Coverage</div></div>
-      <div class="stat"><div class="stat-val">2</div><div class="stat-lab">Output Formats</div></div>
+      <div class="stat"><div class="stat-val">4</div><div class="stat-lab">Chunking Strategies</div></div>
+      <div class="stat"><div class="stat-val">3</div><div class="stat-lab">Embedding Models</div></div>
+      <div class="stat"><div class="stat-val">43</div><div class="stat-lab">Tests Passing</div></div>
     </div>
   </div>
 
@@ -557,10 +571,249 @@ print(data["data"]["tables"])</code></pre>
 
   </div>
 
+
+    <!-- RAG PIPELINE SECTION -->
+    <section id="ingest">
+      <div class="section-title">✨ RAG Pipeline — Week 4</div>
+
+      <!-- Chunking strategy cards -->
+      <div class="engine-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:24px;">
+        <div class="engine-card">
+          <div class="engine-icon">📐</div>
+          <div class="engine-name">Fixed-Size</div>
+          <div class="engine-key">chunking_strategy=fixed</div>
+          <div class="engine-desc">Token-based sliding window (512 tok, 50 overlap) via tiktoken. Fastest. Best for uniform docs.</div>
+        </div>
+        <div class="engine-card">
+          <div class="engine-icon">🔁</div>
+          <div class="engine-name">Recursive</div>
+          <div class="engine-key">chunking_strategy=recursive</div>
+          <div class="engine-desc">Hierarchical separator splitting (\n\n → \n → . → word). Good quality-speed balance.</div>
+        </div>
+        <div class="engine-card">
+          <div class="engine-icon">🧠</div>
+          <div class="engine-name">Semantic</div>
+          <div class="engine-key">chunking_strategy=semantic</div>
+          <div class="engine-desc">Cosine-similarity breakpoints between sentence groups. Most coherent chunks. Slowest.</div>
+        </div>
+        <div class="engine-card recommended">
+          <div class="engine-icon">📄</div>
+          <div class="engine-name">Layout-Aware</div>
+          <div class="engine-key">chunking_strategy=layout_aware</div>
+          <div class="engine-desc">Heading + table boundary detection. Tables are atomic. Best NDCG@5 (0.71). Recommended.</div>
+        </div>
+      </div>
+
+      <!-- POST /api/v1/ingest -->
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method-pill pill-post">POST</span>
+          <span class="endpoint-path">/api/v1/ingest</span>
+          <span class="endpoint-summary">Ingest PDF into the RAG vector store</span>
+        </div>
+        <div class="endpoint-body">
+          <p style="color:var(--muted);font-size:13.5px;margin-bottom:20px;">Runs the full pipeline: Extract → Chunk → Embed → Attach Metadata → Store in FAISS. Returns chunk count, document ID, and per-stage timing.</p>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">file</td><td><span class="param-type">File</span></td><td><span class="required-tag">REQUIRED</span></td><td>—</td><td>PDF file to ingest</td></tr>
+              <tr><td class="param-name">engine</td><td><span class="param-type">string</span></td><td><span class="optional-tag">optional</span></td><td>fast</td><td>Extraction engine: <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">fast</code> / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">structural</code> / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">hybrid</code></td></tr>
+              <tr><td class="param-name">chunking_strategy</td><td><span class="param-type">string</span></td><td><span class="optional-tag">optional</span></td><td>recursive</td><td><code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">fixed</code> / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">recursive</code> / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">semantic</code> / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">layout_aware</code></td></tr>
+              <tr><td class="param-name">embedding_model</td><td><span class="param-type">string</span></td><td><span class="optional-tag">optional</span></td><td>minilm</td><td><code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">minilm</code> (384d) / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">bge</code> (384d) / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">e5</code> (768d)</td></tr>
+            </tbody>
+          </table>
+          <div class="code-tabs">
+            <div class="tab-header">
+              <button class="tab-btn active" onclick="switchTab(this,'ingest-res')">Response</button>
+              <button class="tab-btn" onclick="switchTab(this,'ingest-curl')">cURL</button>
+            </div>
+            <div id="ingest-res" class="tab-content active">
+              <pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "document_id": "9f7cb330-9b30-4aa6-903a-ad578fd08c6a",
+    "source_filename": "q3_report.pdf",
+    "extraction_engine": "fast",
+    "chunking_strategy": "layout_aware",
+    "embedding_model": "all-MiniLM-L6-v2",
+    "chunks_created": 59,
+    "total_vectors_in_store": 59,
+    "stage_times_sec": {
+      "extract_sec": 0.11,
+      "chunk_sec": 0.02,
+      "embed_sec": 0.48,
+      "store_sec": 0.003
+    },
+    "total_pipeline_time_sec": 0.62
+  }
+}</code></pre>
+            </div>
+            <div id="ingest-curl" class="tab-content">
+              <pre><code class="language-bash">curl -X POST http://127.0.0.1:8000/api/v1/ingest \
+  -F "file=@report.pdf" \
+  -F "engine=fast" \
+  -F "chunking_strategy=layout_aware" \
+  -F "embedding_model=minilm"</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- POST /api/v1/query -->
+      <div class="endpoint-card" id="query">
+        <div class="endpoint-header">
+          <span class="method-pill pill-post">POST</span>
+          <span class="endpoint-path">/api/v1/query</span>
+          <span class="endpoint-summary">Query vector store by natural language</span>
+        </div>
+        <div class="endpoint-body">
+          <p style="color:var(--muted);font-size:13.5px;margin-bottom:20px;">Embeds your query using the same model used during ingest, performs cosine-similarity search on the FAISS index, and returns the top-k most relevant chunks with metadata and similarity scores.</p>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">query</td><td><span class="param-type">string</span></td><td><span class="required-tag">REQUIRED</span></td><td>—</td><td>Natural language question to search for</td></tr>
+              <tr><td class="param-name">embedding_model</td><td><span class="param-type">string</span></td><td><span class="optional-tag">optional</span></td><td>minilm</td><td>Must match model used during ingest</td></tr>
+              <tr><td class="param-name">top_k</td><td><span class="param-type">int</span></td><td><span class="optional-tag">optional</span></td><td>5</td><td>Number of results to return (1–20)</td></tr>
+              <tr><td class="param-name">filter_strategy</td><td><span class="param-type">string</span></td><td><span class="optional-tag">optional</span></td><td>—</td><td>Filter results by chunking strategy</td></tr>
+              <tr><td class="param-name">filter_chunk_type</td><td><span class="param-type">string</span></td><td><span class="optional-tag">optional</span></td><td>—</td><td>Filter by type: <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">text</code> / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">table</code> / <code style="background:var(--tag-bg);padding:1px 5px;border-radius:3px;font-size:11px;">heading</code></td></tr>
+            </tbody>
+          </table>
+          <div class="code-tabs">
+            <div class="tab-header">
+              <button class="tab-btn active" onclick="switchTab(this,'query-res')">Response</button>
+              <button class="tab-btn" onclick="switchTab(this,'query-curl')">cURL</button>
+            </div>
+            <div id="query-res" class="tab-content active">
+              <pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "query": "What is the total revenue?",
+    "embedding_model": "all-MiniLM-L6-v2",
+    "total_results": 5,
+    "query_time_sec": 0.042,
+    "results": [
+      {
+        "chunk_text": "Total revenue for Q3 was $2.4 billion...",
+        "source_filename": "q3_report.pdf",
+        "page_number": 3,
+        "chunk_type": "text",
+        "chunking_strategy": "layout_aware",
+        "similarity_score": 0.913
+      }
+    ]
+  }
+}</code></pre>
+            </div>
+            <div id="query-curl" class="tab-content">
+              <pre><code class="language-bash">curl -X POST http://127.0.0.1:8000/api/v1/query \
+  -F "query=What is the total revenue?" \
+  -F "embedding_model=minilm" \
+  -F "top_k=5"</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INGEST LIVE TESTER -->
+    <section id="try-ingest">
+      <div class="try-panel">
+        <h3>📥 Live Tester — Ingest PDF</h3>
+        <p>Upload a PDF and watch it get chunked, embedded, and stored in the FAISS vector store in real-time.</p>
+        <div class="try-form">
+          <div class="form-group full">
+            <label class="form-label">PDF File</label>
+            <input class="form-file" type="file" id="ingest-file" accept=".pdf">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Chunking Strategy</label>
+            <select class="form-select" id="ingest-strategy">
+              <option value="layout_aware">layout_aware (Recommended)</option>
+              <option value="recursive">recursive</option>
+              <option value="fixed">fixed</option>
+              <option value="semantic">semantic</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Embedding Model</label>
+            <select class="form-select" id="ingest-model">
+              <option value="minilm">minilm — all-MiniLM-L6-v2 (Fast)</option>
+              <option value="bge">bge — BAAI/bge-small-en-v1.5 (Better Quality)</option>
+              <option value="e5">e5 — intfloat/e5-base-v2 (Best Quality)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Extraction Engine</label>
+            <select class="form-select" id="ingest-engine">
+              <option value="fast">fast — PyMuPDF</option>
+              <option value="structural">structural — pdfplumber</option>
+              <option value="hybrid">hybrid — Camelot + PyMuPDF</option>
+            </select>
+          </div>
+          <button class="btn-send" onclick="sendIngest()">📥 Ingest PDF into Vector Store</button>
+        </div>
+        <div class="try-response" id="ingest-response">
+          <div class="response-header">
+            <span class="response-status" id="ingest-status"></span>
+            <span class="response-time" id="ingest-time"></span>
+          </div>
+          <pre id="ingest-output" style="white-space:pre-wrap;word-break:break-all;"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUERY LIVE TESTER -->
+    <section id="try-query">
+      <div class="try-panel">
+        <h3>🔍 Live Tester — Query Vector Store</h3>
+        <p>Ask a natural language question and retrieve the most relevant chunks from your ingested documents.</p>
+        <div class="try-form">
+          <div class="form-group full">
+            <label class="form-label">Your Question</label>
+            <input class="form-select" type="text" id="query-text" placeholder="e.g. What is the total revenue for Q3?" style="font-size:13px;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Embedding Model</label>
+            <select class="form-select" id="query-model">
+              <option value="minilm">minilm (must match ingest model)</option>
+              <option value="bge">bge</option>
+              <option value="e5">e5</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Top-K Results</label>
+            <select class="form-select" id="query-topk">
+              <option value="3">3</option>
+              <option value="5" selected>5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Filter by Chunk Type (optional)</label>
+            <select class="form-select" id="query-type">
+              <option value="">All types</option>
+              <option value="text">text</option>
+              <option value="table">table</option>
+              <option value="heading">heading</option>
+            </select>
+          </div>
+          <button class="btn-send" onclick="sendQuery()">🔍 Search Vector Store</button>
+        </div>
+        <div class="try-response" id="query-response">
+          <div class="response-header">
+            <span class="response-status" id="query-status"></span>
+            <span class="response-time" id="query-time"></span>
+          </div>
+          <pre id="query-output" style="white-space:pre-wrap;word-break:break-all;"></pre>
+        </div>
+      </div>
+    </section>
+
   <!-- FOOTER -->
   <div class="footer">
-    <span>SIA Extraction Microservice · v2.0.0 · Built by Atharva Avhad</span>
-    <span>FastAPI · PyMuPDF · Camelot · pdfplumber</span>
+    <span>SIA Extraction + RAG Microservice · v3.0.0 · Built by Atharva Avhad</span>
+    <span>FastAPI · PyMuPDF · Camelot · FAISS · sentence-transformers</span>
   </div>
 </div>
 
@@ -611,6 +864,80 @@ print(data["data"]["tables"])</code></pre>
     } finally {
       respBox.style.display = 'block';
       btn.textContent = '⚡ Send Request';
+      btn.disabled = false;
+    }
+  }
+
+  async function sendIngest() {
+    const file = document.getElementById('ingest-file').files[0];
+    if (!file) { alert('Please select a PDF file.'); return; }
+    const strategy = document.getElementById('ingest-strategy').value;
+    const model    = document.getElementById('ingest-model').value;
+    const engine   = document.getElementById('ingest-engine').value;
+
+    const form = new FormData();
+    form.append('file', file);
+    form.append('chunking_strategy', strategy);
+    form.append('embedding_model', model);
+    form.append('engine', engine);
+
+    const btn = document.querySelector('#try-ingest .btn-send');
+    btn.textContent = 'Processing... (may take 10-30s for model load)';
+    btn.disabled = true;
+    const t0 = Date.now();
+
+    try {
+      const res = await fetch('/api/v1/ingest', { method: 'POST', body: form });
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+      const text = await res.text();
+      document.getElementById('ingest-status').textContent = `${res.status} ${res.ok ? '[OK]' : '[ERROR]'}`;
+      document.getElementById('ingest-status').style.color = res.ok ? 'var(--green)' : 'var(--red)';
+      document.getElementById('ingest-time').textContent = `${elapsed}s`;
+      let formatted;
+      try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch { formatted = text; }
+      document.getElementById('ingest-output').textContent = formatted;
+    } catch(e) {
+      document.getElementById('ingest-output').textContent = 'Connection error: ' + e.message;
+    } finally {
+      document.getElementById('ingest-response').style.display = 'block';
+      btn.textContent = '📥 Ingest PDF into Vector Store';
+      btn.disabled = false;
+    }
+  }
+
+  async function sendQuery() {
+    const query = document.getElementById('query-text').value.trim();
+    if (!query) { alert('Please enter a query.'); return; }
+    const model  = document.getElementById('query-model').value;
+    const topk   = document.getElementById('query-topk').value;
+    const type   = document.getElementById('query-type').value;
+
+    const form = new FormData();
+    form.append('query', query);
+    form.append('embedding_model', model);
+    form.append('top_k', topk);
+    if (type) form.append('filter_chunk_type', type);
+
+    const btn = document.querySelector('#try-query .btn-send');
+    btn.textContent = 'Searching...';
+    btn.disabled = true;
+    const t0 = Date.now();
+
+    try {
+      const res = await fetch('/api/v1/query', { method: 'POST', body: form });
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+      const text = await res.text();
+      document.getElementById('query-status').textContent = `${res.status} ${res.ok ? '[OK]' : '[ERROR]'}`;
+      document.getElementById('query-status').style.color = res.ok ? 'var(--green)' : 'var(--red)';
+      document.getElementById('query-time').textContent = `${elapsed}s`;
+      let formatted;
+      try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch { formatted = text; }
+      document.getElementById('query-output').textContent = formatted;
+    } catch(e) {
+      document.getElementById('query-output').textContent = 'Connection error: ' + e.message;
+    } finally {
+      document.getElementById('query-response').style.display = 'block';
+      btn.textContent = '🔍 Search Vector Store';
       btn.disabled = false;
     }
   }
