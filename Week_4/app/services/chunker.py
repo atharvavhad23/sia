@@ -151,36 +151,50 @@ class RecursiveChunker(BaseChunker):
         self.max_chars = max_chars
         self.overlap = overlap
 
-    def _split_text(self, text: str) -> List[str]:
-        """Recursively split text using the separator hierarchy."""
-        for sep in self.SEPARATORS:
-            if sep == "":
-                # Last resort: hard split
-                parts = [text[i:i + self.max_chars]
-                         for i in range(0, len(text), self.max_chars - self.overlap)]
-                return [p for p in parts if p.strip()]
+    def _split_text(self, text: str, sep_index: int = 0) -> List[str]:
+        """
+        Recursively split text using the separator hierarchy.
+        sep_index tracks which separator level we are currently at,
+        preventing re-trying the same separator and hitting recursion limits.
+        """
+        # Base case: exceeded all separators — hard split by character count
+        if sep_index >= len(self.SEPARATORS):
+            parts = [text[i:i + self.max_chars]
+                     for i in range(0, len(text), max(1, self.max_chars - self.overlap))]
+            return [p for p in parts if p.strip()]
 
-            parts = text.split(sep)
-            merged: List[str] = []
-            current = ""
-            for part in parts:
-                candidate = (current + sep + part).strip() if current else part.strip()
-                if len(candidate) <= self.max_chars:
-                    current = candidate
+        sep = self.SEPARATORS[sep_index]
+
+        # Empty separator = last resort hard split
+        if sep == "":
+            parts = [text[i:i + self.max_chars]
+                     for i in range(0, len(text), max(1, self.max_chars - self.overlap))]
+            return [p for p in parts if p.strip()]
+
+        raw_parts = text.split(sep)
+
+        # If this separator doesn't split the text, try the next one
+        if len(raw_parts) <= 1:
+            return self._split_text(text, sep_index + 1)
+
+        merged: List[str] = []
+        current = ""
+        for part in raw_parts:
+            candidate = (current + sep + part).strip() if current else part.strip()
+            if len(candidate) <= self.max_chars:
+                current = candidate
+            else:
+                if current:
+                    merged.append(current)
+                # Part still too long — descend to the NEXT separator level
+                if len(part) > self.max_chars:
+                    merged.extend(self._split_text(part, sep_index + 1))
+                    current = ""
                 else:
-                    if current:
-                        merged.append(current)
-                    # part itself may be too long — recurse one level deeper
-                    if len(part) > self.max_chars:
-                        merged.extend(self._split_text(part))
-                        current = ""
-                    else:
-                        current = part.strip()
-            if current:
-                merged.append(current)
-            if merged:
-                return merged
-        return [text]
+                    current = part.strip()
+        if current:
+            merged.append(current)
+        return merged if merged else [text]
 
     def chunk(self, document: Dict[str, Any]) -> List[Chunk]:
         logger.info(f"RecursiveChunker: starting (max_chars={self.max_chars}, overlap={self.overlap})")
