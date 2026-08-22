@@ -81,13 +81,23 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"success": False, "error": "Internal Server Error", "details": "An unexpected backend failure occurred."},
     )
 
-# Mount static files
+# Mount static files & benchmark results
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+if os.path.exists("results"):
+    app.mount("/results", StaticFiles(directory="results"), name="results")
 
 @app.get("/docs", include_in_schema=False)
 async def custom_docs():
     """Serve our beautiful custom documentation page."""
     with open("app/static/docs.html", "r", encoding="utf-8") as f:
+        html = f.read()
+    return HTMLResponse(content=html)
+
+@app.get("/dashboard", include_in_schema=False)
+@app.get("/week5-dashboard", include_in_schema=False)
+async def week5_dashboard():
+    """Serve the interactive Week 5 LanceDB performance dashboard."""
+    with open("dashboard.html", "r", encoding="utf-8") as f:
         html = f.read()
     return HTMLResponse(content=html)
 
