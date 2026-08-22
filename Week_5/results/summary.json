@@ -1,0 +1,32 @@
+{
+  "insertion": {
+    "max_rows_per_sec": 2112.6,
+    "p99_at_50k": 1.8514
+  },
+  "indexing": {
+    "recommended": "No Index (Brute-Force)",
+    "recall_at_10": 1.0,
+    "p50_ms": 38.2825
+  },
+  "query": {
+    "sweet_spot_nprobe": 32,
+    "p50_ms": 11.5106,
+    "recall_at_10": 0.501
+  },
+  "concurrent": {
+    "peak_qps": 275.5,
+    "peak_threads": 16,
+    "p99_at_peak": 68.8479
+  },
+  "storage": {
+    "ratio_at_10k": 0.988,
+    "bytes_per_vector": 1554.38
+  },
+  "stress": {
+    "avg_qps": 219.42,
+    "peak_p99_ms": 56.113,
+    "peak_mem_mib": 211.33,
+    "total_errors": 0
+  },
+  "total_benchmark_time_sec": 194.9
+}

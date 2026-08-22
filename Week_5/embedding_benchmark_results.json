@@ -1,0 +1,62 @@
+[
+  {
+    "model": "all-MiniLM-L6-v2",
+    "dimensionality": 384,
+    "num_chunks": 32,
+    "total_time_sec": 1.7173,
+    "ms_per_chunk": 53.665,
+    "peak_memory_mb": 0.35,
+    "batch_size": 32,
+    "mode": "batched"
+  },
+  {
+    "model": "all-MiniLM-L6-v2",
+    "dimensionality": 384,
+    "num_chunks": 20,
+    "total_time_sec": 0.949,
+    "ms_per_chunk": 47.452,
+    "peak_memory_mb": 0.05,
+    "batch_size": 1,
+    "mode": "unbatched"
+  },
+  {
+    "model": "BAAI/bge-small-en-v1.5",
+    "dimensionality": 384,
+    "num_chunks": 32,
+    "total_time_sec": 6.2392,
+    "ms_per_chunk": 194.975,
+    "peak_memory_mb": 0.53,
+    "batch_size": 32,
+    "mode": "batched"
+  },
+  {
+    "model": "BAAI/bge-small-en-v1.5",
+    "dimensionality": 384,
+    "num_chunks": 20,
+    "total_time_sec": 1.4215,
+    "ms_per_chunk": 71.074,
+    "peak_memory_mb": 0.07,
+    "batch_size": 1,
+    "mode": "unbatched"
+  },
+  {
+    "model": "intfloat/e5-base-v2",
+    "dimensionality": 768,
+    "num_chunks": 32,
+    "total_time_sec": 17.3657,
+    "ms_per_chunk": 542.68,
+    "peak_memory_mb": 0.53,
+    "batch_size": 32,
+    "mode": "batched"
+  },
+  {
+    "model": "intfloat/e5-base-v2",
+    "dimensionality": 768,
+    "num_chunks": 20,
+    "total_time_sec": 3.8126,
+    "ms_per_chunk": 190.629,
+    "peak_memory_mb": 0.1,
+    "batch_size": 1,
+    "mode": "unbatched"
+  }
+]

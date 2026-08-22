@@ -1,0 +1,30 @@
+[
+  {
+    "n_rows": 1000,
+    "raw_size_mb": 1.4648,
+    "lancedb_size_mb": 1.4978,
+    "compression_ratio": 0.978,
+    "bytes_per_vector": 1570.56
+  },
+  {
+    "n_rows": 5000,
+    "raw_size_mb": 7.3242,
+    "lancedb_size_mb": 7.4131,
+    "compression_ratio": 0.988,
+    "bytes_per_vector": 1554.64
+  },
+  {
+    "n_rows": 10000,
+    "raw_size_mb": 14.6484,
+    "lancedb_size_mb": 14.8237,
+    "compression_ratio": 0.988,
+    "bytes_per_vector": 1554.38
+  },
+  {
+    "n_rows": 50000,
+    "raw_size_mb": 73.2422,
+    "lancedb_size_mb": 74.0386,
+    "compression_ratio": 0.989,
+    "bytes_per_vector": 1552.7
+  }
+]

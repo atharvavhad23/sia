@@ -1,0 +1,47 @@
+[
+  {
+    "threads": 1,
+    "total_queries": 50,
+    "elapsed_sec": 0.6061,
+    "qps": 82.5,
+    "p50_ms": 9.0162,
+    "p99_ms": 46.1459,
+    "error_rate_pct": 0.0
+  },
+  {
+    "threads": 2,
+    "total_queries": 100,
+    "elapsed_sec": 0.664,
+    "qps": 150.6,
+    "p50_ms": 11.591,
+    "p99_ms": 29.8329,
+    "error_rate_pct": 0.0
+  },
+  {
+    "threads": 4,
+    "total_queries": 200,
+    "elapsed_sec": 0.8931,
+    "qps": 223.93,
+    "p50_ms": 17.1052,
+    "p99_ms": 37.0535,
+    "error_rate_pct": 0.0
+  },
+  {
+    "threads": 8,
+    "total_queries": 400,
+    "elapsed_sec": 1.6841,
+    "qps": 237.52,
+    "p50_ms": 30.1575,
+    "p99_ms": 73.6879,
+    "error_rate_pct": 0.0
+  },
+  {
+    "threads": 16,
+    "total_queries": 800,
+    "elapsed_sec": 2.9038,
+    "qps": 275.5,
+    "p50_ms": 57.0246,
+    "p99_ms": 68.8479,
+    "error_rate_pct": 0.0
+  }
+]

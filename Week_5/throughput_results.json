@@ -1,0 +1,56 @@
+[
+  {
+    "strategy": "fixed",
+    "model": "minilm",
+    "docs_processed": 3,
+    "total_chunks": 75,
+    "avg_latency_sec": 20.3268,
+    "docs_per_minute": 2.95,
+    "chunks_total": 75
+  },
+  {
+    "strategy": "fixed",
+    "model": "bge",
+    "docs_processed": 3,
+    "total_chunks": 75,
+    "avg_latency_sec": 9.3109,
+    "docs_per_minute": 6.44,
+    "chunks_total": 75
+  },
+  {
+    "strategy": "recursive",
+    "model": "minilm",
+    "docs_processed": 3,
+    "total_chunks": 98,
+    "avg_latency_sec": 6.0536,
+    "docs_per_minute": 9.91,
+    "chunks_total": 98
+  },
+  {
+    "strategy": "recursive",
+    "model": "bge",
+    "docs_processed": 3,
+    "total_chunks": 98,
+    "avg_latency_sec": 8.4686,
+    "docs_per_minute": 7.09,
+    "chunks_total": 98
+  },
+  {
+    "strategy": "layout_aware",
+    "model": "minilm",
+    "docs_processed": 3,
+    "total_chunks": 64,
+    "avg_latency_sec": 5.5951,
+    "docs_per_minute": 10.72,
+    "chunks_total": 64
+  },
+  {
+    "strategy": "layout_aware",
+    "model": "bge",
+    "docs_processed": 3,
+    "total_chunks": 64,
+    "avg_latency_sec": 8.3226,
+    "docs_per_minute": 7.21,
+    "chunks_total": 64
+  }
+]
