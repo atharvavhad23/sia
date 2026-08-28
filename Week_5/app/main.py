@@ -303,11 +303,12 @@ async def query_store(
     top_k: int = Form(5, description="Number of top results to return (1–20)"),
     filter_strategy: str = Form("", description="Optional: filter by chunking strategy"),
     filter_chunk_type: str = Form("", description="Optional: filter by chunk type (text/table/heading)"),
+    filter_filename: str = Form("", description="Optional: filter by source PDF filename"),
 ):
     """
     **Retrieve top-k relevant chunks** from the vector store for a given query.
 
-    Embeds the query → cosine similarity search → optional metadata filter → returns results.
+    Embeds the query → cosine similarity search → deduplicates & filters → returns clean results.
     """
     from app.services.rag_pipeline import query_documents
 
@@ -325,9 +326,29 @@ async def query_store(
             top_k,
             filter_strategy if filter_strategy else None,
             filter_chunk_type if filter_chunk_type else None,
+            filter_filename if filter_filename else None,
         )
         return {"success": True, "data": result}
     except Exception as e:
         logger.error(f"Query failed: {e}")
         logger.error(traceback.format_exc())
         return JSONResponse(status_code=500, content={"success": False, "error": "Query failed.", "details": str(e)})
+
+
+@app.post(
+    "/api/v1/reset",
+    tags=["RAG Pipeline"],
+    summary="Reset and clear the vector database",
+)
+async def reset_store():
+    """
+    Wipes all existing vectors and metadata from the database so you can start clean.
+    """
+    from app.services.rag_pipeline import reset_vector_store
+
+    try:
+        await run_in_threadpool(reset_vector_store)
+        return {"success": True, "message": "Vector database has been reset and cleared successfully."}
+    except Exception as e:
+        logger.error(f"Reset failed: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": "Reset failed.", "details": str(e)})

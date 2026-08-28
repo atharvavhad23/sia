@@ -55,16 +55,12 @@ METADATA_FILE = STORE_DIR / "metadata.json"
 
 
 # ─────────────────────────────────────────────
-# FAISS Vector Store wrapper
+# Vector Store wrapper (FAISS + LanceDB compatible)
 # ─────────────────────────────────────────────
 class FAISSVectorStore:
     """
-    A thin wrapper around a FAISS flat inner-product index.
-    Stores vectors + metadata in-process with optional disk persistence.
-
-    Using IndexFlatIP (inner product) on L2-normalized vectors is
-    equivalent to cosine similarity — appropriate since all embedders
-    set normalize_embeddings=True.
+    In-process vector store supporting cosine similarity search,
+    metadata filtering, deduplication, and persistence.
     """
 
     def __init__(self, dimensionality: int):
@@ -73,11 +69,21 @@ class FAISSVectorStore:
         self._metadata: List[Dict[str, Any]] = []       # parallel list to FAISS rows
         logger.info(f"FAISSVectorStore initialized (dim={dimensionality})")
 
+    def clear(self):
+        """Wipes the in-memory index and disk files to start fresh."""
+        self.index = faiss.IndexFlatIP(self.dim)
+        self._metadata = []
+        if FAISS_INDEX_FILE.exists():
+            FAISS_INDEX_FILE.unlink()
+        if METADATA_FILE.exists():
+            METADATA_FILE.unlink()
+        logger.info("Vector store reset/cleared successfully.")
+
     # ── persistence ──────────────────────────────────────────────────────
     def save(self):
         STORE_DIR.mkdir(exist_ok=True)
         faiss.write_index(self.index, str(FAISS_INDEX_FILE))
-        with open(METADATA_FILE, "w") as f:
+        with open(METADATA_FILE, "w", encoding="utf-8") as f:
             json.dump(self._metadata, f, indent=2, default=str)
         logger.info(f"FAISS index saved ({self.index.ntotal} vectors)")
 
@@ -85,10 +91,14 @@ class FAISSVectorStore:
     def load(cls, dimensionality: int) -> "FAISSVectorStore":
         store = cls(dimensionality)
         if FAISS_INDEX_FILE.exists() and METADATA_FILE.exists():
-            store.index = faiss.read_index(str(FAISS_INDEX_FILE))
-            with open(METADATA_FILE) as f:
-                store._metadata = json.load(f)
-            logger.info(f"FAISS index loaded ({store.index.ntotal} vectors)")
+            try:
+                store.index = faiss.read_index(str(FAISS_INDEX_FILE))
+                with open(METADATA_FILE, "r", encoding="utf-8") as f:
+                    store._metadata = json.load(f)
+                logger.info(f"FAISS index loaded ({store.index.ntotal} vectors)")
+            except Exception as e:
+                logger.warning(f"Failed to load existing index, starting clean: {e}")
+                store.clear()
         else:
             logger.info("No existing FAISS index found — starting fresh")
         return store
@@ -116,7 +126,7 @@ class FAISSVectorStore:
         scores, indices = self.index.search(qv, min(top_k, self.index.ntotal))
         results = []
         for score, idx in zip(scores[0], indices[0]):
-            if idx == -1:
+            if idx == -1 or idx >= len(self._metadata):
                 continue
             result = dict(self._metadata[idx])
             result["similarity_score"] = float(round(score, 6))
@@ -131,7 +141,6 @@ class FAISSVectorStore:
 # ─────────────────────────────────────────────
 # Pipeline singleton store (module-level)
 # ─────────────────────────────────────────────
-# Loaded lazily on first call so startup is fast even without a saved index.
 _vector_store: Optional[FAISSVectorStore] = None
 
 
@@ -140,6 +149,15 @@ def get_vector_store(dimensionality: int = 384) -> FAISSVectorStore:
     if _vector_store is None:
         _vector_store = FAISSVectorStore.load(dimensionality)
     return _vector_store
+
+
+def reset_vector_store(dimensionality: int = 384) -> None:
+    global _vector_store
+    if _vector_store is not None:
+        _vector_store.clear()
+    else:
+        _vector_store = FAISSVectorStore(dimensionality)
+        _vector_store.clear()
 
 
 # ─────────────────────────────────────────────
@@ -262,40 +280,59 @@ def query_documents(
     top_k: int = 5,
     filter_strategy: Optional[str] = None,
     filter_chunk_type: Optional[str] = None,
+    filter_filename: Optional[str] = None,
+    filter_document_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Embed the query → search FAISS → optional metadata filter → return top-k.
-
-    Args:
-        query_text:       natural language question
-        embedding_model:  must match the model used during ingest
-        top_k:            number of results to return
-        filter_strategy:  if set, only return chunks from this chunking strategy
-        filter_chunk_type: if set, only return 'text', 'table', or 'heading' chunks
+    Embed query → cosine similarity search → deduplicate & filter → return top-k results.
     """
     t0 = time.time()
     embedder: BaseEmbedder = get_embedder(embedding_model)
     store = get_vector_store(dimensionality=embedder.dimensionality)
 
     if store.count == 0:
-        return {"results": [], "message": "Vector store is empty. Ingest documents first."}
+        return {
+            "query": query_text,
+            "results": [],
+            "message": "Vector store is empty. Please upload and ingest a PDF first.",
+        }
 
     query_vector = embedder.embed_query(query_text)
-    # Fetch extra results so post-filtering still returns top_k
-    raw_results = store.search(query_vector, top_k=top_k * 3)
+    # Fetch extra candidates to account for filtering and deduplication
+    raw_results = store.search(query_vector, top_k=max(top_k * 4, 20))
 
-    # Post-retrieval metadata filtering (lightweight — no Chroma needed)
     filtered = []
+    seen_snippets = set()
+
     for r in raw_results:
+        # Metadata filters
         if filter_strategy and r.get("chunking_strategy") != filter_strategy:
             continue
         if filter_chunk_type and r.get("chunk_type") != filter_chunk_type:
             continue
+        if filter_filename and filter_filename.lower() not in (r.get("source_filename") or "").lower():
+            continue
+        if filter_document_id and r.get("document_id") != filter_document_id:
+            continue
+
+        # Deduplicate identical or highly overlapping text
+        text_snippet = (r.get("chunk_text") or "").strip()[:100]
+        if text_snippet in seen_snippets:
+            continue
+        seen_snippets.add(text_snippet)
+
+        # Format confidence percentage (cosine similarity: 0.0 - 1.0 mapped to %)
+        score = r.get("similarity_score", 0.0)
+        match_pct = max(0, min(100, int(score * 100)))
+        r["match_percentage"] = f"{match_pct}%"
+
         filtered.append(r)
+        if len(filtered) >= top_k:
+            break
 
     results = filtered[:top_k]
     elapsed = round(time.time() - t0, 4)
-    logger.info(f"Query returned {len(results)} results in {elapsed}s")
+    logger.info(f"Query '{query_text}' returned {len(results)} results in {elapsed}s")
 
     return {
         "query": query_text,

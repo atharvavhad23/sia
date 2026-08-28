@@ -802,13 +802,18 @@ print(data["data"]["tables"])</code></pre>
             </select>
           </div>
           <button class="btn-send" onclick="sendQuery()">🔍 Search Vector Store</button>
+          <button type="button" style="background:#dc2626;color:white;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;" onclick="resetStore()">🗑️ Clear / Reset Vector Store</button>
         </div>
         <div class="try-response" id="query-response">
           <div class="response-header">
             <span class="response-status" id="query-status"></span>
             <span class="response-time" id="query-time"></span>
           </div>
-          <pre id="query-output" style="white-space:pre-wrap;word-break:break-all;"></pre>
+          <div id="query-card-container" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;"></div>
+          <details style="margin-top:12px;">
+            <summary style="cursor:pointer;color:var(--muted);font-size:12px;font-family:sans-serif;">View Raw JSON Response</summary>
+            <pre id="query-output" style="white-space:pre-wrap;word-break:break-all;margin-top:8px;"></pre>
+          </details>
         </div>
       </div>
     </section>
@@ -816,7 +821,7 @@ print(data["data"]["tables"])</code></pre>
   <!-- FOOTER -->
   <div class="footer">
     <span>SIA Extraction + RAG Microservice · v3.0.0 · Built by Atharva Avhad</span>
-    <span>FastAPI · PyMuPDF · Camelot · FAISS · sentence-transformers</span>
+    <span>FastAPI · PyMuPDF · Camelot · FAISS · LanceDB · sentence-transformers</span>
   </div>
 </div>
 
@@ -829,6 +834,21 @@ print(data["data"]["tables"])</code></pre>
     container.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(id).classList.add('active');
+  }
+
+  async function resetStore() {
+    if (!confirm("Are you sure you want to clear and reset the vector database? All existing embeddings will be wiped so you can start fresh.")) return;
+    try {
+      const res = await fetch('/api/v1/reset', { method: 'POST' });
+      const data = await res.json();
+      alert(data.message || "Vector store cleared successfully!");
+      const out = document.getElementById('query-output');
+      if (out) out.textContent = JSON.stringify(data, null, 2);
+      const cardContainer = document.getElementById('query-card-container');
+      if (cardContainer) cardContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px 0;">✅ Database is now clean and empty. Upload a fresh PDF to test!</div>';
+    } catch(e) {
+      alert("Failed to reset store: " + e.message);
+    }
   }
 
   async function sendRequest() {
@@ -885,20 +905,18 @@ print(data["data"]["tables"])</code></pre>
     form.append('engine', engine);
 
     const btn = document.querySelector('#try-ingest .btn-send');
-    btn.textContent = 'Processing... (may take 10-30s for model load)';
+    btn.textContent = '⏳ Processing & Embedding PDF...';
     btn.disabled = true;
     const t0 = Date.now();
 
     try {
       const res = await fetch('/api/v1/ingest', { method: 'POST', body: form });
       const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
-      const text = await res.text();
-      document.getElementById('ingest-status').textContent = `${res.status} ${res.ok ? '[OK]' : '[ERROR]'}`;
+      const json = await res.json();
+      document.getElementById('ingest-status').textContent = `${res.status} ${res.ok ? '[OK] Ingested' : '[ERROR]'}`;
       document.getElementById('ingest-status').style.color = res.ok ? 'var(--green)' : 'var(--red)';
       document.getElementById('ingest-time').textContent = `${elapsed}s`;
-      let formatted;
-      try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch { formatted = text; }
-      document.getElementById('ingest-output').textContent = formatted;
+      document.getElementById('ingest-output').textContent = JSON.stringify(json, null, 2);
     } catch(e) {
       document.getElementById('ingest-output').textContent = 'Connection error: ' + e.message;
     } finally {
@@ -922,20 +940,51 @@ print(data["data"]["tables"])</code></pre>
     if (type) form.append('filter_chunk_type', type);
 
     const btn = document.querySelector('#try-query .btn-send');
-    btn.textContent = 'Searching...';
+    btn.textContent = '🔍 Searching...';
     btn.disabled = true;
     const t0 = Date.now();
 
     try {
       const res = await fetch('/api/v1/query', { method: 'POST', body: form });
       const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
-      const text = await res.text();
-      document.getElementById('query-status').textContent = `${res.status} ${res.ok ? '[OK]' : '[ERROR]'}`;
+      const json = await res.json();
+      document.getElementById('query-status').textContent = `${res.status} ${res.ok ? '✅ Success' : '❌ Error'}`;
       document.getElementById('query-status').style.color = res.ok ? 'var(--green)' : 'var(--red)';
       document.getElementById('query-time').textContent = `${elapsed}s`;
-      let formatted;
-      try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch { formatted = text; }
-      document.getElementById('query-output').textContent = formatted;
+
+      const cardContainer = document.getElementById('query-card-container');
+      cardContainer.innerHTML = '';
+
+      if (json.data && json.data.results && json.data.results.length > 0) {
+        json.data.results.forEach((r, idx) => {
+          const card = document.createElement('div');
+          card.style.background = '#131b2e';
+          card.style.border = '1px solid #1f2e47';
+          card.style.borderRadius = '10px';
+          card.style.padding = '14px 18px';
+          card.style.fontFamily = 'Inter, sans-serif';
+          
+          const matchScore = r.match_percentage || Math.round((r.similarity_score || 0) * 100) + '%';
+          
+          card.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="background:#6366f1;color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">#${idx + 1}</span>
+                <span style="font-size:12.5px;color:#a5b4fc;font-weight:600;">📄 ${r.source_filename || 'Document'}</span>
+                <span style="font-size:11.5px;color:var(--muted);">· Page ${r.page_number || 1}</span>
+                <span style="font-size:10px;background:#1e2940;color:#94a3b8;padding:2px 6px;border-radius:4px;text-transform:uppercase;">${r.chunk_type || 'text'}</span>
+              </div>
+              <span style="background:rgba(16,185,129,0.18);color:var(--green);font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:6px;border:1px solid rgba(16,185,129,0.3);">${matchScore} Match</span>
+            </div>
+            <div style="color:#e2e8f0;font-size:13px;line-height:1.6;white-space:pre-wrap;background:#0b1120;padding:12px;border-radius:6px;border-left:3px solid #6366f1;">${r.chunk_text || ''}</div>
+          `;
+          cardContainer.appendChild(card);
+        });
+      } else {
+        cardContainer.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">No matching chunks found. Try uploading a PDF first or refining your query.</div>';
+      }
+
+      document.getElementById('query-output').textContent = JSON.stringify(json, null, 2);
     } catch(e) {
       document.getElementById('query-output').textContent = 'Connection error: ' + e.message;
     } finally {
