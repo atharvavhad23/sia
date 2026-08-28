@@ -297,12 +297,16 @@ def query_documents(
             "message": "Vector store is empty. Please upload and ingest a PDF first.",
         }
 
+    # Query expansion: optional prefix/suffix manipulation could go here
     query_vector = embedder.embed_query(query_text)
     # Fetch extra candidates to account for filtering and deduplication
     raw_results = store.search(query_vector, top_k=max(top_k * 4, 20))
 
     filtered = []
     seen_snippets = set()
+    
+    # Calculate global max for re-normalization
+    max_score = raw_results[0].get("similarity_score", 1.0) if raw_results else 1.0
 
     for r in raw_results:
         # Metadata filters
@@ -321,9 +325,9 @@ def query_documents(
             continue
         seen_snippets.add(text_snippet)
 
-        # Format confidence percentage (cosine similarity: 0.0 - 1.0 mapped to %)
+        # Format confidence percentage (re-normalized against the top match)
         score = r.get("similarity_score", 0.0)
-        match_pct = max(0, min(100, int(score * 100)))
+        match_pct = max(0, min(100, int((score / (max_score or 1.0)) * 100)))
         r["match_percentage"] = f"{match_pct}%"
 
         filtered.append(r)
@@ -331,6 +335,11 @@ def query_documents(
             break
 
     results = filtered[:top_k]
+
+    # ── Extractive QA: find the best-matching sentence per result ───────
+    if results:
+        results = _extract_answer_snippets(query_text, results, embedder)
+
     elapsed = round(time.time() - t0, 4)
     logger.info(f"Query '{query_text}' returned {len(results)} results in {elapsed}s")
 

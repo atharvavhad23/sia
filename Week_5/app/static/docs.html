@@ -904,25 +904,78 @@
           <span style="font-size:13px;font-weight:700;color:var(--text);">Found ${results.length} Relevant Citations (${json.data.query_time_sec}s):</span>
         </div>`;
 
+        const currentQuery = document.getElementById('search-query-input').value.trim();
+
         results.forEach((r, idx) => {
           const matchScore = r.match_percentage || Math.round((r.similarity_score || 0) * 100) + '%';
+          const matchNum = parseInt((r.match_percentage || '0').replace('%', ''));
+          const barColor = matchNum >= 60 ? '#10b981' : matchNum >= 35 ? '#f59e0b' : '#6366f1';
+          const answerSnippet = r.answer_snippet || '';
+          const fullText = r.chunk_text || '';
+          const hasSnippet = answerSnippet && answerSnippet.trim().length > 0 && answerSnippet !== fullText;
+          const detailId = `detail-${idx}`;
+
           html += `
-            <div class="result-card">
+            <div class="result-card" style="margin-bottom:16px;">
               <div class="result-header">
                 <div class="result-meta">
                   <span class="rank-pill">#${idx + 1}</span>
                   <span class="doc-pill">📄 ${r.source_filename || 'PDF Document'}</span>
-                  <span class="page-pill">· Page ${r.page_number || 1}</span>
+                  <span class="page-pill">&nbsp;· Page ${r.page_number || 1}</span>
                   <span class="type-pill">${r.chunk_type || 'text'}</span>
+                  ${ r.section_title ? `<span class="type-pill" style="background:rgba(6,182,212,0.12);color:#67e8f9;border-color:rgba(6,182,212,0.3);">§ ${escapeHtml(r.section_title)}</span>` : '' }
                 </div>
                 <span class="match-pill">${matchScore} Match</span>
               </div>
-              <div class="result-body">${escapeHtml(r.chunk_text || '')}</div>
+
+              <!-- Match confidence bar -->
+              <div style="height:3px;background:var(--surface3);border-radius:2px;margin:10px 0 14px;">
+                <div style="height:3px;width:${matchNum}%;background:${barColor};border-radius:2px;transition:width 0.6s ease;"></div>
+              </div>
+
+              ${ hasSnippet ? `
+              <!-- Extractive answer box -->
+              <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 16px;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                  <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:#fbbf24;text-transform:uppercase;">🎯 Best Match</span>
+                </div>
+                <p style="font-size:14px;line-height:1.65;color:var(--text);font-weight:500;">${highlightQuery(answerSnippet, currentQuery)}</p>
+              </div>
+              ` : `
+              <!-- No separate snippet, show full text highlighted -->
+              <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 16px;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                  <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:#fbbf24;text-transform:uppercase;">🎯 Best Match</span>
+                </div>
+                <p style="font-size:14px;line-height:1.65;color:var(--text);font-weight:500;">${highlightQuery(fullText, currentQuery)}</p>
+              </div>
+              ` }
+
+              ${ hasSnippet ? `
+              <!-- Collapsible full passage -->
+              <details id="${detailId}" style="margin-top:4px;">
+                <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--text-muted);list-style:none;display:flex;align-items:center;gap:6px;user-select:none;">
+                  <span style="transition:transform 0.2s;display:inline-block;" class="toggle-arrow">▶</span>
+                  Show full passage (${fullText.length} chars)
+                </summary>
+                <div class="result-body" style="margin-top:10px;font-size:12.5px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:10px;">${escapeHtml(fullText)}</div>
+              </details>
+              ` : '' }
+
             </div>
           `;
         });
 
         display.innerHTML = html;
+
+        // Toggle arrow animation
+        display.querySelectorAll('details').forEach(d => {
+          d.addEventListener('toggle', () => {
+            const arrow = d.querySelector('.toggle-arrow');
+            if (arrow) arrow.style.transform = d.open ? 'rotate(90deg)' : 'rotate(0deg)';
+          });
+        });
+
       } else {
         display.innerHTML = `<div style="color:var(--red);padding:20px;background:var(--surface2);border-radius:8px;">${json.error || "Query failed"}</div>`;
       }
@@ -953,7 +1006,16 @@
   }
 
   function escapeHtml(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return (text || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
+  }
+
+  function highlightQuery(text, query) {
+    if (!query || !text) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const words = query.trim().split(/\s+/).filter(w => w.length > 2);
+    if (!words.length) return escaped;
+    const regex = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+    return escaped.replace(regex, '<mark style="background:rgba(99,102,241,0.35);color:#c7d2fe;padding:1px 2px;border-radius:3px;">$1</mark>');
   }
 </script>
 </body>
