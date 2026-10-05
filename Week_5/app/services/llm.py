@@ -120,27 +120,22 @@ def generate_rag_answer_stream(
         context = _build_context(retrieved_chunks)
         prompt = _build_prompt(query, context, chat_history)
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:streamGenerateContent?alt=sse"
+        # Using non-streaming endpoint internally because the proxy's SSE stream is dropping connections with 503
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
         headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
         session = _get_retry_session()
-        with session.post(url, headers=headers, json=payload, stream=True, timeout=GEMINI_TIMEOUT) as response:
-            response.raise_for_status()
-            for line in response.iter_lines():
-                if line:
-                    decoded_line = line.decode('utf-8')
-                    if decoded_line.startswith("data: "):
-                        data_str = decoded_line[6:]
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            data = json.loads(data_str)
-                            text = data["candidates"][0]["content"]["parts"][0]["text"]
-                            if text:
-                                yield text
-                        except (json.JSONDecodeError, KeyError, IndexError):
-                            continue
+        response = session.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
+        response.raise_for_status()
+        
+        data = response.json()
+        full_text = data["candidates"][0]["content"]["parts"][0]["text"]
+        
+        # Simulate streaming by yielding words so the UI still looks like it's streaming
+        words = full_text.split(" ")
+        for i, word in enumerate(words):
+            yield word + (" " if i < len(words) - 1 else "")
                             
     except Exception as e:
         logger.error(f"Gemini stream error: {e}", exc_info=True)
