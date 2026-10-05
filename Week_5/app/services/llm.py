@@ -139,8 +139,18 @@ def generate_rag_answer_stream(
                             
     except Exception as e:
         logger.error(f"Gemini stream error: {e}", exc_info=True)
-        is_overloaded = "timeout" in str(e).lower() or "connect" in type(e).__name__.lower() or "503" in str(e)
+        is_overloaded = "timeout" in str(e).lower() or "connect" in type(e).__name__.lower() or "503" in str(e) or "429" in str(e)
         if is_overloaded:
-            yield "\n\n*The AI model endpoint is currently overloaded or unreachable. Please wait a moment and try again.*"
+            yield "\n\n*(AI synthesis is currently rate-limited. Falling back to the most relevant document excerpt)*\n\n"
+            if retrieved_chunks:
+                fallback_text = retrieved_chunks[0].get("chunk_text", "").strip()
+                if not fallback_text:
+                    fallback_text = "No extractable text found in the retrieved documents."
+            else:
+                fallback_text = "No relevant documents found to answer your query."
+                
+            words = fallback_text.split(" ")
+            for i, word in enumerate(words):
+                yield word + (" " if i < len(words) - 1 else "")
         else:
             yield f"\n\n*Stream interrupted: {type(e).__name__} - {str(e)}*"
