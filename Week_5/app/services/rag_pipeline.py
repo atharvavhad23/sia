@@ -1,22 +1,19 @@
 """
-rag_pipeline.py — Day 3: End-to-End RAG Pipeline
-==================================================
+rag_pipeline.py — End-to-End RAG Pipeline
+==========================================
 Wires the full pipeline in sequence:
 
   Upload → Parse (pdfparser.py) → Chunk (chunker.py)
        → Embed (embedder.py) → Attach Metadata (schemas.py)
-       → Store (FAISS) → [later] Query → Retrieve
+       → Store (LanceDB) → Query → Retrieve → Synthesize (Gemini)
 
-Vector Store Choice: FAISS
-  - Rationale: Zero external services, in-process, ideal for benchmarking
-    throughput cleanly (no network I/O skewing results).
-  - Persistence: FAISS index + metadata are serialized to disk (JSON + .index)
-    so data survives restarts.
-  - Tradeoff: No built-in metadata filtering (Chroma wins here); we
-    implement lightweight metadata filtering in Python post-retrieval.
+Vector Store: LanceDB (migrated from FAISS in Week 5)
+  - Native on-disk persistence, cosine similarity search, metadata filtering
+  - Evaluated against FAISS (Week 4) and BM25 hybrid (Week 6); dense-only
+    LanceDB was chosen as the production store.
 
-All heavy operations (extract, chunk, embed, upsert) run in a ThreadPoolExecutor
-to stay consistent with the existing async architecture in app/main.py.
+All heavy operations run in a ThreadPoolExecutor to stay consistent
+with the async architecture in app/main.py.
 """
 
 import json
@@ -52,8 +49,6 @@ logger.propagate = False
 # Paths for persistence
 # ─────────────────────────────────────────────
 STORE_DIR = Path("vector_store")
-FAISS_INDEX_FILE = STORE_DIR / "index.faiss"
-METADATA_FILE = STORE_DIR / "metadata.json"
 
 
 # ─────────────────────────────────────────────
@@ -105,10 +100,6 @@ class LanceDBVectorStore:
         db_path = STORE_DIR / "lancedb"
         if db_path.exists():
             shutil.rmtree(db_path, ignore_errors=True)
-        if FAISS_INDEX_FILE.exists():
-            FAISS_INDEX_FILE.unlink()
-        if METADATA_FILE.exists():
-            METADATA_FILE.unlink()
         self.db = lancedb.connect(str(db_path))
         self.tbl = self.db.create_table(self.table_name, schema=self.schema)
         logger.info("LanceDB vector store reset/cleared successfully.")
@@ -316,6 +307,16 @@ def ingest_document(
     total_time = round(time.time() - pipeline_start, 4)
     logger.info(f"[{document_id}] Pipeline complete in {total_time}s | total_vectors={store.count}")
 
+    # Invalidate Redis cache after a successful ingest so stale query
+    # results don't persist for the TTL window after new knowledge is added.
+    try:
+        from app.services.cache import get_cache
+        purged = get_cache().invalidate_all()
+        if purged:
+            logger.info(f"[{document_id}] Redis: purged {purged} cached query results post-ingest.")
+    except Exception:
+        pass  # Cache failures must never break the ingest path
+
     return {
         "document_id": document_id,
         "source_filename": source_filename,
@@ -327,18 +328,6 @@ def ingest_document(
         "stage_times_sec": stage_times,
         "total_pipeline_time_sec": total_time,
     }
-
-    # Invalidate Redis cache after a successful ingest so stale query
-    # results don't persist for the TTL window after new knowledge is added.
-    try:
-        from app.services.cache import get_cache
-        purged = get_cache().invalidate_all()
-        if purged:
-            logger.info(f"[{document_id}] Redis: purged {purged} cached query results post-ingest.")
-    except Exception:
-        pass  # Cache failures must never break the ingest path
-
-    return result
 
 
 # ─────────────────────────────────────────────
@@ -352,9 +341,10 @@ def query_documents(
     filter_chunk_type: Optional[str] = None,
     filter_filename: Optional[str] = None,
     filter_document_id: Optional[str] = None,
+    chat_history: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     """
-    Embed query → cosine similarity search → deduplicate & filter → return top-k results.
+    Embed query → cosine similarity search → deduplicate & filter → Gemini synthesis → return.
     """
     # ── Cache lookup — check Redis before running embedding ────────────
     from app.services.cache import get_cache
@@ -423,7 +413,7 @@ def query_documents(
     generated_answer = None
     if results:
         from app.services.llm import generate_rag_answer
-        generated_answer = generate_rag_answer(query_text, results)
+        generated_answer = generate_rag_answer(query_text, results, chat_history)
 
     elapsed = round(time.time() - t0, 4)
     logger.info(f"Query '{query_text}' returned {len(results)} results in {elapsed}s")
@@ -442,6 +432,58 @@ def query_documents(
     cache.set(query_text, embedding_model, top_k, response)
 
     return response
+
+
+def query_documents_for_stream(
+    query_text: str,
+    embedding_model: str = "minilm",
+    top_k: int = 5,
+    filter_chunk_type: Optional[str] = None,
+    chat_history: Optional[List[Dict]] = None,
+) -> tuple:
+    """
+    Retrieval-only path for the streaming endpoint.
+    Returns (results, cache_hit) without calling the LLM.
+    The SSE endpoint handles LLM streaming itself.
+    """
+    from app.services.cache import get_cache
+    cache = get_cache()
+    cached = cache.get(query_text, embedding_model, top_k)
+    if cached is not None:
+        return cached.get("results", []), True
+
+    embedder: BaseEmbedder = get_embedder(embedding_model)
+    store = get_vector_store(dimensionality=embedder.dimensionality)
+
+    if store.count == 0:
+        return [], False
+
+    query_vector = embedder.embed_query(query_text)
+    raw_results = store.search(query_vector, top_k=max(top_k * 4, 20))
+
+    filtered = []
+    seen_snippets = set()
+    max_score = raw_results[0].get("similarity_score", 1.0) if raw_results else 1.0
+
+    for r in raw_results:
+        if filter_chunk_type and r.get("chunk_type") != filter_chunk_type:
+            continue
+        text_snippet = (r.get("chunk_text") or "").strip()[:100]
+        if text_snippet in seen_snippets:
+            continue
+        seen_snippets.add(text_snippet)
+        score = r.get("similarity_score", 0.0)
+        match_pct = max(0, min(100, int((score / (max_score or 1.0)) * 100)))
+        r["match_percentage"] = f"{match_pct}%"
+        filtered.append(r)
+        if len(filtered) >= top_k:
+            break
+
+    results = filtered[:top_k]
+    if results:
+        results = _extract_answer_snippets(query_text, results, embedder)
+
+    return results, False
 
 
 def _extract_answer_snippets(

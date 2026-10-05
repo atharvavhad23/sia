@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from app.services.pdfparser import PDFParserService
@@ -8,11 +8,11 @@ import os
 import logging
 import traceback
 import logging
-
 import json
 from fastapi.concurrency import run_in_threadpool
 import time
 import psutil
+import asyncio
 
 # Setup Structured JSON Logging
 class JsonFormatter(logging.Formatter):
@@ -259,7 +259,7 @@ async def ingest_pdf(
 ):
     """
     **Full RAG ingestion pipeline:**
-    Upload PDF → Extract → Chunk → Embed → Store in FAISS vector store.
+    Upload PDF → Extract → Chunk → Embed → Store in LanceDB vector store.
 
     Returns chunk count, timing per stage, and a document_id for tracing.
     """
@@ -327,19 +327,29 @@ async def query_store(
     filter_strategy: str = Form("", description="Optional: filter by chunking strategy"),
     filter_chunk_type: str = Form("", description="Optional: filter by chunk type (text/table/heading)"),
     filter_filename: str = Form("", description="Optional: filter by source PDF filename"),
+    chat_history: str = Form("", description="Optional: JSON array of prior conversation turns [{role, content}]"),
 ):
     """
     **Retrieve top-k relevant chunks** from the vector store for a given query.
 
-    Embeds the query → cosine similarity search → deduplicates & filters → returns clean results.
+    Embeds the query → cosine similarity search → deduplicates & filters → Gemini synthesis → returns results.
     """
     from app.services.rag_pipeline import query_documents
 
     if not query.strip():
         return JSONResponse(status_code=400, content={"success": False, "error": "Query cannot be empty."})
+    if len(query) > 2000:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Query too long. Maximum 2000 characters."})
     if embedding_model not in ["minilm", "bge", "e5"]:
         return JSONResponse(status_code=400, content={"success": False, "error": "Invalid embedding_model."})
     top_k = max(1, min(top_k, 20))
+
+    history = []
+    if chat_history:
+        try:
+            history = json.loads(chat_history)
+        except Exception:
+            pass  # Malformed history is non-fatal
 
     try:
         result = await run_in_threadpool(
@@ -350,12 +360,97 @@ async def query_store(
             filter_strategy if filter_strategy else None,
             filter_chunk_type if filter_chunk_type else None,
             filter_filename if filter_filename else None,
+            None,
+            history if history else None,
         )
         return {"success": True, "data": result}
     except Exception as e:
         logger.error(f"Query failed: {e}")
         logger.error(traceback.format_exc())
         return JSONResponse(status_code=500, content={"success": False, "error": "Query failed.", "details": str(e)})
+
+
+@app.post(
+    "/api/v1/query/stream",
+    tags=["RAG Pipeline"],
+    summary="Query with streaming Gemini response (SSE)",
+)
+async def query_stream(
+    query: str = Form(..., description="Natural language question"),
+    embedding_model: str = Form("minilm", description="Embedding model: 'minilm', 'bge', 'e5'"),
+    top_k: int = Form(5, description="Number of top results"),
+    filter_chunk_type: str = Form("", description="Optional chunk type filter"),
+    chat_history: str = Form("", description="Optional: JSON array of prior turns [{role, content}]"),
+):
+    """
+    **Streaming query endpoint.** Retrieves top-k chunks then streams Gemini's answer
+    token-by-token via Server-Sent Events (SSE). Also emits the source citations as
+    a final structured JSON event.
+
+    **SSE Event format:**
+    - `data: {"type": "token", "text": "..."}` — one per Gemini output token
+    - `data: {"type": "sources", "results": [...]}` — final event with citation data
+    - `data: {"type": "done"}` — stream complete
+    """
+    from app.services.rag_pipeline import query_documents_for_stream
+    from app.services.llm import generate_rag_answer_stream
+
+    if not query.strip():
+        return JSONResponse(status_code=400, content={"success": False, "error": "Query cannot be empty."})
+    if len(query) > 2000:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Query too long."})
+
+    top_k = max(1, min(top_k, 20))
+    history = []
+    if chat_history:
+        try:
+            history = json.loads(chat_history)
+        except Exception:
+            pass
+
+    async def event_generator():
+        try:
+            # Step 1: Run vector search (blocking, in thread pool)
+            results, cache_hit = await run_in_threadpool(
+                query_documents_for_stream,
+                query,
+                embedding_model,
+                top_k,
+                filter_chunk_type if filter_chunk_type else None,
+                history if history else None,
+            )
+
+            # Step 2: Emit cache status
+            yield f'data: {json.dumps({"type": "meta", "cache_hit": cache_hit, "total_results": len(results)})}\n\n'
+
+            if cache_hit:
+                # Serve cached AI answer if available
+                cached_answer = results[0].get("_cached_answer", "") if results else ""
+                if cached_answer:
+                    yield f'data: {json.dumps({"type": "token", "text": cached_answer})}\n\n'
+            else:
+                # Step 3: Stream Gemini answer token-by-token
+                for token in generate_rag_answer_stream(query, results, history):
+                    yield f'data: {json.dumps({"type": "token", "text": token})}\n\n'
+                    await asyncio.sleep(0)  # Yield control to event loop
+
+            # Step 4: Emit source citations
+            clean_results = [{k: v for k, v in r.items() if k != "_cached_answer"} for r in results]
+            yield f'data: {json.dumps({"type": "sources", "results": clean_results})}\n\n'
+            yield f'data: {json.dumps({"type": "done"})}\n\n'
+
+        except Exception as e:
+            logger.error(f"Stream error: {e}")
+            yield f'data: {json.dumps({"type": "error", "message": str(e)})}\n\n'
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post(
