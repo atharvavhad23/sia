@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     libglib2.0-0 \
     libgl1 \
+    tesseract-ocr \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

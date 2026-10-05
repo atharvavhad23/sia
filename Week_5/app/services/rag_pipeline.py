@@ -235,6 +235,8 @@ def ingest_document(
         doc = PDFParserService.extract_fast_text(file_path)
     elif extraction_engine == "structural":
         doc = PDFParserService.extract_structural_text(file_path)
+    elif extraction_engine == "ocr":
+        doc = PDFParserService.extract_ocr_text(file_path)
     else:
         doc = PDFParserService.extract_hybrid_text(file_path)
     stage_times["extract_sec"] = round(time.time() - t0, 4)

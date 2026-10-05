@@ -139,3 +139,36 @@ class PDFParserService:
             "pages": text_content,
             "tables": tables_data
         }
+
+    @staticmethod
+    def extract_ocr_text(file_path: str) -> Dict[str, Any]:
+        """
+        OCR Approach:
+        Uses pdf2image and pytesseract to convert PDF pages into images and run Optical Character Recognition.
+        Essential for scanned documents or image-based PDFs without a text layer.
+        """
+        logger.info(f"Starting 'ocr' extraction for {file_path}")
+        PDFParserService._validate_pdf(file_path)
+        
+        text_content = []
+        try:
+            from pdf2image import convert_from_path
+            import pytesseract
+            
+            # Convert PDF pages to images
+            images = convert_from_path(file_path)
+            for page_num, image in enumerate(images):
+                # Extract text using Tesseract
+                text = pytesseract.image_to_string(image)
+                text_content.append({
+                    "page": page_num + 1,
+                    "text": text.strip() if text else ""
+                })
+        except Exception as e:
+            logger.error(f"OCR extraction failed: {e}")
+            raise RuntimeError(f"OCR extraction failed: {e}")
+            
+        return {
+            "engine": "ocr_pytesseract",
+            "pages": text_content
+        }
