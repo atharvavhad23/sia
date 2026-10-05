@@ -1,1 +1,2 @@
 Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,/api/v1/health/metrics,"ConnectionRefusedError(10061, '[WinError 10061] No connection could be made because the target machine actively refused it.')",122,2026-10-04T15:26:53Z,2026-10-04T15:26:54Z

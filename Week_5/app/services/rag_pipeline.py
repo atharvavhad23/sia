@@ -307,7 +307,7 @@ def ingest_document(
         metadata_list.append(entry)
 
     # ── Stage 5: Store ──────────────────────────────────────────────────
-    logger.info(f"[{document_id}] Stage 5: Upserting to FAISS")
+    logger.info(f"[{document_id}] Stage 5: Upserting to LanceDB")
     t0 = time.time()
     store = get_vector_store(dimensionality=embedder.dimensionality)
     store.upsert(vectors, metadata_list)
@@ -328,6 +328,18 @@ def ingest_document(
         "total_pipeline_time_sec": total_time,
     }
 
+    # Invalidate Redis cache after a successful ingest so stale query
+    # results don't persist for the TTL window after new knowledge is added.
+    try:
+        from app.services.cache import get_cache
+        purged = get_cache().invalidate_all()
+        if purged:
+            logger.info(f"[{document_id}] Redis: purged {purged} cached query results post-ingest.")
+    except Exception:
+        pass  # Cache failures must never break the ingest path
+
+    return result
+
 
 # ─────────────────────────────────────────────
 # Core pipeline function: query
@@ -344,6 +356,14 @@ def query_documents(
     """
     Embed query → cosine similarity search → deduplicate & filter → return top-k results.
     """
+    # ── Cache lookup — check Redis before running embedding ────────────
+    from app.services.cache import get_cache
+    cache = get_cache()
+    cached = cache.get(query_text, embedding_model, top_k)
+    if cached is not None:
+        cached["cache_hit"] = True
+        return cached
+
     t0 = time.time()
     embedder: BaseEmbedder = get_embedder(embedding_model)
     store = get_vector_store(dimensionality=embedder.dimensionality)
@@ -352,6 +372,7 @@ def query_documents(
         return {
             "query": query_text,
             "results": [],
+            "cache_hit": False,
             "message": "Vector store is empty. Please upload and ingest a PDF first.",
         }
 
@@ -401,13 +422,19 @@ def query_documents(
     elapsed = round(time.time() - t0, 4)
     logger.info(f"Query '{query_text}' returned {len(results)} results in {elapsed}s")
 
-    return {
+    response = {
         "query": query_text,
         "embedding_model": embedder.model_name,
         "total_results": len(results),
         "query_time_sec": elapsed,
+        "cache_hit": False,
         "results": results,
     }
+
+    # Store result in Redis cache for subsequent identical queries
+    cache.set(query_text, embedding_model, top_k, response)
+
+    return response
 
 
 def _extract_answer_snippets(
