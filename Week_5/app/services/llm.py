@@ -15,7 +15,15 @@ DESIGN DECISIONS:
 """
 import os
 import logging
+import socket
 from typing import List, Dict, Any, Generator
+
+# Monkeypatch to force IPv4, working around Docker/WSL2 httpx IPv6 'Network is unreachable' errors
+_old_getaddrinfo = socket.getaddrinfo
+def _ipv4_getaddrinfo(*args, **kwargs):
+    responses = _old_getaddrinfo(*args, **kwargs)
+    return [r for r in responses if r[0] == socket.AF_INET]
+socket.getaddrinfo = _ipv4_getaddrinfo
 
 logger = logging.getLogger("sia.llm")
 
@@ -119,5 +127,5 @@ def generate_rag_answer_stream(
             if chunk.text:
                 yield chunk.text
     except Exception as e:
-        logger.error(f"Gemini stream error: {e}")
-        yield f"\n\n*Stream interrupted: {type(e).__name__}*"
+        logger.error(f"Gemini stream error: {e}", exc_info=True)
+        yield f"\n\n*Stream interrupted: {type(e).__name__} - {str(e)}*"
