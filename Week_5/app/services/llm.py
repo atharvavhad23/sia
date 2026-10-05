@@ -17,12 +17,21 @@ import os
 import json
 import logging
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from typing import List, Dict, Any, Generator
 
 logger = logging.getLogger("sia.llm")
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 GEMINI_TIMEOUT = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "30"))
+
+def _get_retry_session() -> requests.Session:
+    """Create a requests session with automatic retries for transient API errors (like 503)."""
+    session = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504], allowed_methods=["POST"])
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    return session
 
 
 def _build_context(retrieved_chunks: List[Dict[str, Any]]) -> str:
@@ -82,7 +91,8 @@ def generate_rag_answer(
         headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-        response = requests.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
+        session = _get_retry_session()
+        response = session.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
         response.raise_for_status()
         
         data = response.json()
@@ -114,7 +124,8 @@ def generate_rag_answer_stream(
         headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-        with requests.post(url, headers=headers, json=payload, stream=True, timeout=GEMINI_TIMEOUT) as response:
+        session = _get_retry_session()
+        with session.post(url, headers=headers, json=payload, stream=True, timeout=GEMINI_TIMEOUT) as response:
             response.raise_for_status()
             for line in response.iter_lines():
                 if line:
@@ -133,7 +144,8 @@ def generate_rag_answer_stream(
                             
     except Exception as e:
         logger.error(f"Gemini stream error: {e}", exc_info=True)
-        if "timeout" in str(e).lower() or "connect" in type(e).__name__.lower():
+        is_overloaded = "timeout" in str(e).lower() or "connect" in type(e).__name__.lower() or "503" in str(e)
+        if is_overloaded:
             yield "\n\n*The AI model endpoint is currently overloaded or unreachable. Please wait a moment and try again.*"
         else:
             yield f"\n\n*Stream interrupted: {type(e).__name__} - {str(e)}*"
