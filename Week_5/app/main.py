@@ -11,6 +11,8 @@ import logging
 
 import json
 from fastapi.concurrency import run_in_threadpool
+import time
+import psutil
 
 # Setup Structured JSON Logging
 class JsonFormatter(logging.Formatter):
@@ -57,6 +59,16 @@ app = FastAPI(
 
 TEMP_DIR = "temp_docs"
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time = time.perf_counter() - start_time
+    # Add header for locust to consume if needed, and log it
+    response.headers["X-Process-Time"] = str(process_time)
+    logger.info(f"Path: {request.url.path} | Method: {request.method} | Time: {process_time:.4f}s")
+    return response
 
 # ---------------------------------------------------------
 # Enterprise Error Handlers
@@ -140,6 +152,17 @@ def health_check():
     return {
         "status": "online",
         "service": "SIA Backend Utilities"
+    }
+
+@app.get("/api/v1/health/metrics", tags=["System"], summary="Get System Load Metrics")
+def system_metrics():
+    """Expose CPU and Memory metrics for load testing instrumentation."""
+    process = psutil.Process(os.getpid())
+    return {
+        "cpu_percent_process": process.cpu_percent(interval=0.1),
+        "cpu_percent_system": psutil.cpu_percent(interval=0.1, percpu=True),
+        "memory_rss_mb": process.memory_info().rss / (1024 * 1024),
+        "memory_vms_mb": process.memory_info().vms / (1024 * 1024),
     }
 
 @app.post("/api/v1/extract", tags=["Extraction Engine"], summary="Extract Content from PDF Document")

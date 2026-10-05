@@ -2,46 +2,46 @@
   {
     "threads": 1,
     "total_queries": 50,
-    "elapsed_sec": 0.6061,
-    "qps": 82.5,
-    "p50_ms": 9.0162,
-    "p99_ms": 46.1459,
+    "elapsed_sec": 0.4852,
+    "qps": 103.05,
+    "p50_ms": 7.153,
+    "p99_ms": 42.7524,
     "error_rate_pct": 0.0
   },
   {
     "threads": 2,
     "total_queries": 100,
-    "elapsed_sec": 0.664,
-    "qps": 150.6,
-    "p50_ms": 11.591,
-    "p99_ms": 29.8329,
+    "elapsed_sec": 0.4935,
+    "qps": 202.64,
+    "p50_ms": 8.6285,
+    "p99_ms": 22.7625,
     "error_rate_pct": 0.0
   },
   {
     "threads": 4,
     "total_queries": 200,
-    "elapsed_sec": 0.8931,
-    "qps": 223.93,
-    "p50_ms": 17.1052,
-    "p99_ms": 37.0535,
+    "elapsed_sec": 0.7562,
+    "qps": 264.46,
+    "p50_ms": 13.9315,
+    "p99_ms": 35.7565,
     "error_rate_pct": 0.0
   },
   {
     "threads": 8,
     "total_queries": 400,
-    "elapsed_sec": 1.6841,
-    "qps": 237.52,
-    "p50_ms": 30.1575,
-    "p99_ms": 73.6879,
+    "elapsed_sec": 1.6379,
+    "qps": 244.22,
+    "p50_ms": 30.9983,
+    "p99_ms": 48.1332,
     "error_rate_pct": 0.0
   },
   {
     "threads": 16,
     "total_queries": 800,
-    "elapsed_sec": 2.9038,
-    "qps": 275.5,
-    "p50_ms": 57.0246,
-    "p99_ms": 68.8479,
+    "elapsed_sec": 2.7531,
+    "qps": 290.58,
+    "p50_ms": 53.386,
+    "p99_ms": 76.3862,
     "error_rate_pct": 0.0
   }
 ]

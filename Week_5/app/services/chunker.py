@@ -365,11 +365,11 @@ class LayoutAwareChunker(BaseChunker):
     Args:
         max_chars: soft cap per text chunk (default 2000)
     """
-    def __init__(self, max_chars: int = 2000):
+    def __init__(self, max_chars: int = 500):
         self.max_chars = max_chars
 
     def chunk(self, document: Dict[str, Any]) -> List[Chunk]:
-        logger.info("LayoutAwareChunker: starting")
+        logger.info(f"LayoutAwareChunker: starting (max_chars={self.max_chars})")
         chunks: List[Chunk] = []
         idx = 0
 
@@ -396,69 +396,80 @@ class LayoutAwareChunker(BaseChunker):
             chunks.append(c)
             idx += 1
 
-        # 2. Text pages: split on paragraph boundaries
-        current_heading: Optional[str] = None
+        # 2. Text pages: granular section, project & bullet splitting
+        import re
+        header_re = re.compile(r'^(?:[A-Z\s]{3,35}:?|[A-Za-z0-9\s\-]+:|\d{1,2}\s+[A-Za-z]{3},\s+\d{4})')
+
         for page_data in document.get("pages", []):
             page_num = page_data.get("page", 0)
             text = page_data.get("text", "").strip()
             if not text:
                 continue
 
-            paragraphs = text.split("\n\n")
-            buffer = ""
-            for para in paragraphs:
-                para = para.strip()
-                if not para:
-                    continue
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            buffer = []
+            curr_len = 0
+            current_heading: Optional[str] = None
 
-                # Heading detection heuristic
-                is_heading = (para.isupper() or para.endswith(":")) and len(para) < 120
-                if is_heading:
-                    if buffer.strip():
+            for line in lines:
+                is_bullet = line.startswith('•') or line.startswith('- ') or line.startswith('* ')
+                is_header = bool(header_re.match(line)) and len(line) < 110
+
+                if is_header and len(line) < 40 and (line.isupper() or line.endswith(':')):
+                    current_heading = line
+
+                # Flush buffer on logical topic boundary (header/date/bullet) if buffer already has content
+                if (is_header or is_bullet) and curr_len > 180:
+                    chunk_str = "\n".join(buffer).strip()
+                    if chunk_str:
                         c = Chunk(
-                            text=buffer.strip(),
+                            text=chunk_str,
                             page_number=page_num,
                             chunk_type="text",
                             section_title=current_heading,
                             chunk_index=idx,
                             strategy="layout_aware",
-                            token_count=self._count_tokens(buffer.strip()),
+                            token_count=self._count_tokens(chunk_str),
                         )
                         chunks.append(c)
                         idx += 1
-                        buffer = ""
-                    current_heading = para
-                    buffer = para + "\n"  # attach heading to next paragraph
-                    continue
+                    buffer = [line]
+                    curr_len = len(line)
+                else:
+                    if curr_len + len(line) > self.max_chars and buffer:
+                        chunk_str = "\n".join(buffer).strip()
+                        if chunk_str:
+                            c = Chunk(
+                                text=chunk_str,
+                                page_number=page_num,
+                                chunk_type="text",
+                                section_title=current_heading,
+                                chunk_index=idx,
+                                strategy="layout_aware",
+                                token_count=self._count_tokens(chunk_str),
+                            )
+                            chunks.append(c)
+                            idx += 1
+                        buffer = [line]
+                        curr_len = len(line)
+                    else:
+                        buffer.append(line)
+                        curr_len += len(line)
 
-                # Accumulate paragraph; flush when over limit
-                if len(buffer) + len(para) > self.max_chars and buffer.strip():
+            if buffer:
+                chunk_str = "\n".join(buffer).strip()
+                if chunk_str:
                     c = Chunk(
-                        text=buffer.strip(),
+                        text=chunk_str,
                         page_number=page_num,
                         chunk_type="text",
                         section_title=current_heading,
                         chunk_index=idx,
                         strategy="layout_aware",
-                        token_count=self._count_tokens(buffer.strip()),
+                        token_count=self._count_tokens(chunk_str),
                     )
                     chunks.append(c)
                     idx += 1
-                    buffer = ""
-                buffer += para + "\n\n"
-
-            if buffer.strip():
-                c = Chunk(
-                    text=buffer.strip(),
-                    page_number=page_num,
-                    chunk_type="text",
-                    section_title=current_heading,
-                    chunk_index=idx,
-                    strategy="layout_aware",
-                    token_count=self._count_tokens(buffer.strip()),
-                )
-                chunks.append(c)
-                idx += 1
 
         logger.info(f"LayoutAwareChunker: produced {len(chunks)} chunks")
         return chunks

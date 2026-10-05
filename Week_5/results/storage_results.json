@@ -23,8 +23,8 @@
   {
     "n_rows": 50000,
     "raw_size_mb": 73.2422,
-    "lancedb_size_mb": 74.0386,
+    "lancedb_size_mb": 74.0394,
     "compression_ratio": 0.989,
-    "bytes_per_vector": 1552.7
+    "bytes_per_vector": 1552.72
   }
 ]

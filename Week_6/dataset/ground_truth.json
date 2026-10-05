@@ -1,0 +1,30 @@
+[
+  {
+    "query": "What is NexaShield?",
+    "ground_truth_chunk_ids": [
+      "e8072347-eb37-4ecf-8d75-def3bead7e9f"
+    ],
+    "ground_truth_substring": "NexaShield: Forensic-Grade Deepfake Detection System"
+  },
+  {
+    "query": "What skills were used for NexaShield?",
+    "ground_truth_chunk_ids": [
+      "e8072347-eb37-4ecf-8d75-def3bead7e9f"
+    ],
+    "ground_truth_substring": "PyTorch , OpenCV"
+  },
+  {
+    "query": "What is the wildlife intelligence platform for Koyna?",
+    "ground_truth_chunk_ids": [
+      "06fb5b37-7fbf-4158-bd0a-2fea2483f050"
+    ],
+    "ground_truth_substring": "wildlife intelligence platform for Koyna Wildlife Sanctuary"
+  },
+  {
+    "query": "What does the Water Quality Analysis System do?",
+    "ground_truth_chunk_ids": [
+      "2107d301-9d76-4941-b886-07a8d39afe97"
+    ],
+    "ground_truth_substring": "monitor, analyze, and visualize the water quality"
+  }
+]

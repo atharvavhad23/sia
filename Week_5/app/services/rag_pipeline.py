@@ -28,7 +28,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import faiss
+import uuid
+import lancedb
+import pyarrow as pa
 import numpy as np
 
 from app.services.chunker import BaseChunker, Chunk, get_chunker
@@ -55,53 +57,70 @@ METADATA_FILE = STORE_DIR / "metadata.json"
 
 
 # ─────────────────────────────────────────────
-# Vector Store wrapper (FAISS + LanceDB compatible)
+# Vector Store wrapper (LanceDB)
 # ─────────────────────────────────────────────
-class FAISSVectorStore:
+class LanceDBVectorStore:
     """
     In-process vector store supporting cosine similarity search,
-    metadata filtering, deduplication, and persistence.
+    metadata filtering, deduplication, and native persistence via LanceDB.
     """
 
     def __init__(self, dimensionality: int):
         self.dim = dimensionality
-        self.index = faiss.IndexFlatIP(dimensionality)  # cosine via normalized vectors
-        self._metadata: List[Dict[str, Any]] = []       # parallel list to FAISS rows
-        logger.info(f"FAISSVectorStore initialized (dim={dimensionality})")
+        STORE_DIR.mkdir(exist_ok=True)
+        self.db = lancedb.connect(str(STORE_DIR / "lancedb"))
+        self.table_name = "rag_chunks"
+        
+        # Define strict pyarrow schema for LanceDB
+        self.schema = pa.schema([
+            pa.field("vector", pa.list_(pa.float32(), self.dim)),
+            pa.field("chunk_id", pa.string()),
+            pa.field("document_id", pa.string()),
+            pa.field("source_filename", pa.string()),
+            pa.field("extraction_engine", pa.string()),
+            pa.field("chunking_strategy", pa.string()),
+            pa.field("page_number", pa.int64()),
+            pa.field("section_title", pa.string()),
+            pa.field("chunk_type", pa.string()),
+            pa.field("char_count", pa.int64()),
+            pa.field("token_count", pa.int64()),
+            pa.field("chunk_index", pa.int64()),
+            pa.field("prev_chunk_id", pa.string()),
+            pa.field("next_chunk_id", pa.string()),
+            pa.field("created_at", pa.string()),
+            pa.field("embedding_model", pa.string()),
+            pa.field("chunk_text", pa.string()),
+        ])
+
+        if self.table_name not in self.db.table_names():
+            self.tbl = self.db.create_table(self.table_name, schema=self.schema)
+        else:
+            self.tbl = self.db.open_table(self.table_name)
+
+        logger.info(f"LanceDBVectorStore initialized (dim={dimensionality}, total={self.count})")
 
     def clear(self):
-        """Wipes the in-memory index and disk files to start fresh."""
-        self.index = faiss.IndexFlatIP(self.dim)
-        self._metadata = []
+        """Wipes the disk files to start fresh."""
+        import shutil
+        db_path = STORE_DIR / "lancedb"
+        if db_path.exists():
+            shutil.rmtree(db_path, ignore_errors=True)
         if FAISS_INDEX_FILE.exists():
             FAISS_INDEX_FILE.unlink()
         if METADATA_FILE.exists():
             METADATA_FILE.unlink()
-        logger.info("Vector store reset/cleared successfully.")
+        self.db = lancedb.connect(str(db_path))
+        self.tbl = self.db.create_table(self.table_name, schema=self.schema)
+        logger.info("LanceDB vector store reset/cleared successfully.")
 
     # ── persistence ──────────────────────────────────────────────────────
     def save(self):
-        STORE_DIR.mkdir(exist_ok=True)
-        faiss.write_index(self.index, str(FAISS_INDEX_FILE))
-        with open(METADATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(self._metadata, f, indent=2, default=str)
-        logger.info(f"FAISS index saved ({self.index.ntotal} vectors)")
+        # LanceDB automatically flushes to disk during add/insert.
+        pass
 
     @classmethod
-    def load(cls, dimensionality: int) -> "FAISSVectorStore":
-        store = cls(dimensionality)
-        if FAISS_INDEX_FILE.exists() and METADATA_FILE.exists():
-            try:
-                store.index = faiss.read_index(str(FAISS_INDEX_FILE))
-                with open(METADATA_FILE, "r", encoding="utf-8") as f:
-                    store._metadata = json.load(f)
-                logger.info(f"FAISS index loaded ({store.index.ntotal} vectors)")
-            except Exception as e:
-                logger.warning(f"Failed to load existing index, starting clean: {e}")
-                store.clear()
-        else:
-            logger.info("No existing FAISS index found — starting fresh")
-        return store
+    def load(cls, dimensionality: int) -> "LanceDBVectorStore":
+        return cls(dimensionality)
 
     # ── write ─────────────────────────────────────────────────────────────
     def upsert(self, vectors: np.ndarray, metadata_list: List[Dict[str, Any]]):
@@ -109,9 +128,39 @@ class FAISSVectorStore:
         if vectors.ndim == 1:
             vectors = vectors.reshape(1, -1)
         vectors = vectors.astype(np.float32)
-        self.index.add(vectors)
-        self._metadata.extend(metadata_list)
-        logger.info(f"Upserted {len(metadata_list)} vectors (total={self.index.ntotal})")
+        
+        # Prepare rows for LanceDB
+        rows = []
+        for i, meta in enumerate(metadata_list):
+            row = dict(meta)
+            row["vector"] = vectors[i].tolist()
+            # Convert datetime to ISO string for PyArrow compatibility
+            if isinstance(row.get("created_at"), datetime):
+                row["created_at"] = row["created_at"].isoformat()
+                
+            # Convert UUIDs to strings
+            if isinstance(row.get("chunk_id"), uuid.UUID):
+                row["chunk_id"] = str(row["chunk_id"])
+            if isinstance(row.get("document_id"), uuid.UUID):
+                row["document_id"] = str(row["document_id"])
+            if isinstance(row.get("prev_chunk_id"), uuid.UUID):
+                row["prev_chunk_id"] = str(row["prev_chunk_id"])
+            if isinstance(row.get("next_chunk_id"), uuid.UUID):
+                row["next_chunk_id"] = str(row["next_chunk_id"])
+            
+            # Remove nested dicts if any (like table_metadata which LanceDB doesn't need for basic queries)
+            row.pop("table_metadata", None)
+
+            
+            # Fill missing keys with empty strings to prevent pyarrow null errors
+            for field in self.schema.names:
+                if field != "vector" and row.get(field) is None:
+                    row[field] = 0 if field in ["page_number", "char_count", "token_count", "chunk_index"] else ""
+
+            rows.append(row)
+
+        self.tbl.add(rows)
+        logger.info(f"Upserted {len(rows)} vectors to LanceDB (total={self.count})")
 
     # ── read ──────────────────────────────────────────────────────────────
     def search(
@@ -119,35 +168,44 @@ class FAISSVectorStore:
     ) -> List[Dict[str, Any]]:
         """
         Cosine-similarity search. Returns top-k results with scores.
+        Note: LanceDB natively calculates distances, so we derive cosine similarity.
         """
-        if self.index.ntotal == 0:
+        if self.count == 0:
             return []
-        qv = query_vector.astype(np.float32).reshape(1, -1)
-        scores, indices = self.index.search(qv, min(top_k, self.index.ntotal))
+        
+        qv = query_vector.astype(np.float32).flatten()
+        # LanceDB defaults to L2 or Cosine distance. We specify cosine.
+        res = self.tbl.search(qv).metric("cosine").limit(top_k).to_list()
+        
         results = []
-        for score, idx in zip(scores[0], indices[0]):
-            if idx == -1 or idx >= len(self._metadata):
-                continue
-            result = dict(self._metadata[idx])
-            result["similarity_score"] = float(round(score, 6))
-            results.append(result)
+        for r in res:
+            # Distance is returned. For Cosine Metric in LanceDB: Distance = 1 - CosineSimilarity
+            # Therefore: CosineSimilarity = 1 - Distance
+            dist = r.pop("_distance", 1.0)
+            sim_score = max(0.0, 1.0 - dist)
+            r["similarity_score"] = float(round(sim_score, 6))
+            results.append(r)
+            
         return results
 
     @property
     def count(self) -> int:
-        return self.index.ntotal
+        try:
+            return len(self.tbl)
+        except Exception:
+            return 0
 
 
 # ─────────────────────────────────────────────
 # Pipeline singleton store (module-level)
 # ─────────────────────────────────────────────
-_vector_store: Optional[FAISSVectorStore] = None
+_vector_store: Optional[LanceDBVectorStore] = None
 
 
-def get_vector_store(dimensionality: int = 384) -> FAISSVectorStore:
+def get_vector_store(dimensionality: int = 384) -> LanceDBVectorStore:
     global _vector_store
     if _vector_store is None:
-        _vector_store = FAISSVectorStore.load(dimensionality)
+        _vector_store = LanceDBVectorStore.load(dimensionality)
     return _vector_store
 
 
@@ -156,7 +214,7 @@ def reset_vector_store(dimensionality: int = 384) -> None:
     if _vector_store is not None:
         _vector_store.clear()
     else:
-        _vector_store = FAISSVectorStore(dimensionality)
+        _vector_store = LanceDBVectorStore(dimensionality)
         _vector_store.clear()
 
 
@@ -350,3 +408,58 @@ def query_documents(
         "query_time_sec": elapsed,
         "results": results,
     }
+
+
+def _extract_answer_snippets(
+    query_text: str,
+    results: List[Dict[str, Any]],
+    embedder: "BaseEmbedder",
+) -> List[Dict[str, Any]]:
+    """
+    For each retrieved chunk, split its text into sentences and pick the one
+    with the highest cosine similarity to the query.
+    Adds 'answer_snippet' and 'answer_score' fields to each result dict.
+    This gives a focused extractive answer without needing an LLM.
+    """
+    import re
+    import numpy as np
+
+    # Embed the query once (already normalized by embedder)
+    query_vec = np.array(embedder.embed_query(query_text), dtype=np.float32)
+
+    # Sentence splitter — split on ., !, ?, or newline followed by whitespace
+    _sent_re = re.compile(r'(?<=[.!?\n])\s+')
+
+    for r in results:
+        chunk_text: str = (r.get("chunk_text") or "").strip()
+        if not chunk_text:
+            r["answer_snippet"] = ""
+            r["answer_score"] = 0.0
+            continue
+
+        # Split into sentences and filter trivially short ones (< 20 chars)
+        sentences = [s.strip() for s in _sent_re.split(chunk_text) if len(s.strip()) >= 20]
+
+        # If the chunk is a single sentence or very short, use it as-is
+        if len(sentences) <= 1:
+            r["answer_snippet"] = chunk_text
+            r["answer_score"] = float(round(r.get("similarity_score", 0.0), 4))
+            continue
+
+        # Embed all sentences in one batch
+        try:
+            sent_vecs = np.array(embedder.embed(sentences, batch_size=32), dtype=np.float32)
+        except Exception:
+            r["answer_snippet"] = sentences[0]
+            r["answer_score"] = 0.0
+            continue
+
+        # Cosine similarity: dot product on L2-normalized vectors
+        scores = sent_vecs @ query_vec  # shape (N,)
+        best_idx = int(np.argmax(scores))
+        best_score = float(scores[best_idx])
+
+        r["answer_snippet"] = sentences[best_idx]
+        r["answer_score"] = round(best_score, 4)
+
+    return results

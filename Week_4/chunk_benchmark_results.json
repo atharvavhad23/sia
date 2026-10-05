@@ -7,12 +7,17 @@
     "median_tokens": 290,
     "std_dev": 169.98,
     "boundary_violation_rate_pct": 5.97,
-    "time_sec": 0.039
+    "time_sec": 0.0351
   },
   {
     "strategy": "recursive",
     "file": "q3_report.pdf",
-    "error": "maximum recursion depth exceeded"
+    "chunk_count": 89,
+    "avg_tokens": 190.66,
+    "median_tokens": 218,
+    "std_dev": 116.05,
+    "boundary_violation_rate_pct": 4.49,
+    "time_sec": 0.0198
   },
   {
     "strategy": "layout_aware",
@@ -22,7 +27,7 @@
     "median_tokens": 326,
     "std_dev": 174.31,
     "boundary_violation_rate_pct": 3.39,
-    "time_sec": 0.0182
+    "time_sec": 0.0178
   },
   {
     "strategy": "fixed",
@@ -32,12 +37,17 @@
     "median_tokens": 142.5,
     "std_dev": 194.46,
     "boundary_violation_rate_pct": 0.0,
-    "time_sec": 0.002
+    "time_sec": 0.0016
   },
   {
     "strategy": "recursive",
     "file": "04_Atharva_9.pdf",
-    "error": "maximum recursion depth exceeded"
+    "chunk_count": 4,
+    "avg_tokens": 181,
+    "median_tokens": 196.0,
+    "std_dev": 109.94,
+    "boundary_violation_rate_pct": 0.0,
+    "time_sec": 0.0018
   },
   {
     "strategy": "layout_aware",
@@ -47,7 +57,7 @@
     "median_tokens": 251,
     "std_dev": 195.57,
     "boundary_violation_rate_pct": 0.0,
-    "time_sec": 0.0015
+    "time_sec": 0.0013
   },
   {
     "strategy": "fixed",
@@ -57,12 +67,17 @@
     "median_tokens": 324.5,
     "std_dev": 208.26,
     "boundary_violation_rate_pct": 25.0,
-    "time_sec": 0.0024
+    "time_sec": 0.002
   },
   {
     "strategy": "recursive",
     "file": "nda_contract.pdf",
-    "error": "maximum recursion depth exceeded"
+    "chunk_count": 5,
+    "avg_tokens": 217.6,
+    "median_tokens": 251,
+    "std_dev": 79.74,
+    "boundary_violation_rate_pct": 0.0,
+    "time_sec": 0.002
   },
   {
     "strategy": "layout_aware",
@@ -72,7 +87,7 @@
     "median_tokens": 555.5,
     "std_dev": 88.5,
     "boundary_violation_rate_pct": 0.0,
-    "time_sec": 0.0019
+    "time_sec": 0.0015
   },
   {
     "strategy": "fixed",
@@ -82,7 +97,7 @@
     "median_tokens": 0,
     "std_dev": 0,
     "boundary_violation_rate_pct": 0,
-    "time_sec": 0.0006
+    "time_sec": 0.0005
   },
   {
     "strategy": "recursive",
@@ -92,7 +107,7 @@
     "median_tokens": 0,
     "std_dev": 0,
     "boundary_violation_rate_pct": 0,
-    "time_sec": 0.0006
+    "time_sec": 0.0003
   },
   {
     "strategy": "layout_aware",
@@ -102,7 +117,7 @@
     "median_tokens": 0,
     "std_dev": 0,
     "boundary_violation_rate_pct": 0,
-    "time_sec": 0.0004
+    "time_sec": 0.0003
   },
   {
     "strategy": "semantic",
@@ -112,7 +127,7 @@
     "median_tokens": 23.0,
     "std_dev": 28.03,
     "boundary_violation_rate_pct": 23.11,
-    "time_sec": 54.9259
+    "time_sec": 28.7484
   },
   {
     "strategy": "semantic",
@@ -122,7 +137,7 @@
     "median_tokens": 17.0,
     "std_dev": 19.29,
     "boundary_violation_rate_pct": 28.57,
-    "time_sec": 0.6908
+    "time_sec": 0.7361
   },
   {
     "strategy": "semantic",
@@ -132,6 +147,6 @@
     "median_tokens": 28,
     "std_dev": 35.03,
     "boundary_violation_rate_pct": 22.22,
-    "time_sec": 1.9978
+    "time_sec": 2.0165
   }
 ]

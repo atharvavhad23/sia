@@ -1,0 +1,6 @@
+$de7fbd5b-f7e5-4545-afb7-00758e7d49c1²Ã2vector ÿÿÿÿÿÿÿÿÿ*fixed_size_list:float:38408#chunk_id ÿÿÿÿÿÿÿÿÿ*string08&document_id ÿÿÿÿÿÿÿÿÿ*string08*source_filename ÿÿÿÿÿÿÿÿÿ*string08,extraction_engine ÿÿÿÿÿÿÿÿÿ*string08,chunking_strategy ÿÿÿÿÿÿÿÿÿ*string08%page_number ÿÿÿÿÿÿÿÿÿ*int6408(section_title ÿÿÿÿÿÿÿÿÿ*string08%
+chunk_type ÿÿÿÿÿÿÿÿÿ*string08$
+char_count	 ÿÿÿÿÿÿÿÿÿ*int6408%token_count
+ ÿÿÿÿÿÿÿÿÿ*int6408%chunk_index ÿÿÿÿÿÿÿÿÿ*int6408(prev_chunk_id ÿÿÿÿÿÿÿÿÿ*string08(next_chunk_id ÿÿÿÿÿÿÿÿÿ*string08%
+created_at ÿÿÿÿÿÿÿÿÿ*string08*embedding_model ÿÿÿÿÿÿÿÿÿ*string08%
+chunk_text ÿÿÿÿÿÿÿÿÿ*string08
