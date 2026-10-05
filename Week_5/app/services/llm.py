@@ -14,16 +14,10 @@ DESIGN DECISIONS:
     on this API key as of Week 8 consolidation audit).
 """
 import os
+import json
 import logging
-import socket
+import requests
 from typing import List, Dict, Any, Generator
-
-# Monkeypatch to force IPv4, working around Docker/WSL2 httpx IPv6 'Network is unreachable' errors
-_old_getaddrinfo = socket.getaddrinfo
-def _ipv4_getaddrinfo(*args, **kwargs):
-    responses = _old_getaddrinfo(*args, **kwargs)
-    return [r for r in responses if r[0] == socket.AF_INET]
-socket.getaddrinfo = _ipv4_getaddrinfo
 
 logger = logging.getLogger("sia.llm")
 
@@ -81,20 +75,20 @@ def generate_rag_answer(
         return None  # None signals UI to skip the AI box entirely
 
     try:
-        from google import genai
-        import httpx
-
-        client = genai.Client(api_key=api_key, http_options={"timeout": GEMINI_TIMEOUT})
         context = _build_context(retrieved_chunks)
         prompt = _build_prompt(query, context, chat_history)
 
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        )
-        return response.text
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+        headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+        response = requests.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
+        response.raise_for_status()
+        
+        data = response.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
+        logger.error(f"Gemini API error: {e}", exc_info=True)
         return f"*AI synthesis unavailable* \u2014 showing raw document matches only. (Error: {type(e).__name__})"
 
 
@@ -106,7 +100,6 @@ def generate_rag_answer_stream(
     """
     Stream Gemini's answer token-by-token. Yields text chunks as they arrive.
     Designed for Server-Sent Events (SSE) delivery.
-    On error, yields a single error message string.
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -114,18 +107,33 @@ def generate_rag_answer_stream(
         return
 
     try:
-        from google import genai
-
-        client = genai.Client(api_key=api_key, http_options={"timeout": GEMINI_TIMEOUT})
         context = _build_context(retrieved_chunks)
         prompt = _build_prompt(query, context, chat_history)
 
-        for chunk in client.models.generate_content_stream(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        ):
-            if chunk.text:
-                yield chunk.text
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:streamGenerateContent?alt=sse"
+        headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+        with requests.post(url, headers=headers, json=payload, stream=True, timeout=GEMINI_TIMEOUT) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if line:
+                    decoded_line = line.decode('utf-8')
+                    if decoded_line.startswith("data: "):
+                        data_str = decoded_line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            text = data["candidates"][0]["content"]["parts"][0]["text"]
+                            if text:
+                                yield text
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+                            
     except Exception as e:
         logger.error(f"Gemini stream error: {e}", exc_info=True)
-        yield f"\n\n*Stream interrupted: {type(e).__name__} - {str(e)}*"
+        if "timeout" in str(e).lower() or "connect" in type(e).__name__.lower():
+            yield "\n\n*The AI model endpoint is currently overloaded or unreachable. Please wait a moment and try again.*"
+        else:
+            yield f"\n\n*Stream interrupted: {type(e).__name__} - {str(e)}*"
