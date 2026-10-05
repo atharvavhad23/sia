@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       --bg: #070b14;
@@ -900,7 +901,23 @@
           return;
         }
 
-        let html = `<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+        let html = ``;
+        
+        // ── Render Generative AI Answer ──
+        if (json.data.generated_answer) {
+          html += `
+          <div class="result-card" style="margin-bottom:24px; border: 1px solid var(--accent-light); box-shadow: 0 4px 16px var(--accent-glow);">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;border-bottom:1px solid rgba(99,102,241,0.2);padding-bottom:12px;">
+              <div class="brand-logo" style="width:28px;height:28px;font-size:14px;">✨</div>
+              <span style="font-size:14px;font-weight:700;color:white;">AI Generated Answer</span>
+            </div>
+            <div style="font-size:14px;line-height:1.7;color:#e2e8f0;" id="ai-answer-content">
+              ${marked.parse(json.data.generated_answer)}
+            </div>
+          </div>`;
+        }
+
+        html += `<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:13px;font-weight:700;color:var(--text);">Found ${results.length} Relevant Citations (${json.data.query_time_sec}s):</span>
         </div>`;
 

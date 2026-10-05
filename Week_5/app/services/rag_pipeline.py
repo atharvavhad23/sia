@@ -419,6 +419,12 @@ def query_documents(
     if results:
         results = _extract_answer_snippets(query_text, results, embedder)
 
+    # ── Generative QA: Synthesize an answer with Gemini ────────────
+    generated_answer = None
+    if results:
+        from app.services.llm import generate_rag_answer
+        generated_answer = generate_rag_answer(query_text, results)
+
     elapsed = round(time.time() - t0, 4)
     logger.info(f"Query '{query_text}' returned {len(results)} results in {elapsed}s")
 
@@ -428,6 +434,7 @@ def query_documents(
         "total_results": len(results),
         "query_time_sec": elapsed,
         "cache_hit": False,
+        "generated_answer": generated_answer,
         "results": results,
     }
 

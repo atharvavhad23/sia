@@ -17,3 +17,4 @@ Thumbs.db
 temp_docs/
 *.docx
 /*.pdf
+.env
