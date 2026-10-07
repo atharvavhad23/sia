@@ -27,6 +27,7 @@ services:
       - REDIS_CACHE_TTL_SECONDS=${REDIS_CACHE_TTL_SECONDS:-3600}
       - UVICORN_WORKERS=${UVICORN_WORKERS:-1}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-flash-lite}
     volumes:
       # Persist LanceDB vector store data across container restarts
       - lancedb_data:/app/vector_store

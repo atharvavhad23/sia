@@ -155,15 +155,29 @@ class PDFParserService:
             from pdf2image import convert_from_path
             import pytesseract
             
-            # Convert PDF pages to images
-            images = convert_from_path(file_path)
-            for page_num, image in enumerate(images):
-                # Extract text using Tesseract
-                text = pytesseract.image_to_string(image)
-                text_content.append({
-                    "page": page_num + 1,
-                    "text": text.strip() if text else ""
-                })
+            # Convert PDF pages to images (dpi=100 for 4x faster OCR with minimal accuracy loss)
+            images = convert_from_path(file_path, dpi=100, thread_count=4)
+            
+            import concurrent.futures
+            import os
+            
+            def process_page(page_idx, img):
+                # Optimize tesseract: skip inversion check to save time
+                custom_config = r'--oem 3 --psm 3 -c tessedit_do_invert=0'
+                extracted = pytesseract.image_to_string(img, config=custom_config)
+                return {
+                    "page": page_idx + 1,
+                    "text": extracted.strip() if extracted else ""
+                }
+                
+            workers = os.cpu_count() or 4
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [executor.submit(process_page, idx, img) for idx, img in enumerate(images)]
+                for future in concurrent.futures.as_completed(futures):
+                    text_content.append(future.result())
+            
+            # Sort pages back into order
+            text_content.sort(key=lambda x: x["page"])
         except Exception as e:
             logger.error(f"OCR extraction failed: {e}")
             raise RuntimeError(f"OCR extraction failed: {e}")
@@ -172,3 +186,28 @@ class PDFParserService:
             "engine": "ocr_pytesseract",
             "pages": text_content
         }
+    @staticmethod
+    def extract_auto_text(file_path: str) -> Dict[str, Any]:
+        """
+        Auto Approach:
+        Attempts 'fast' extraction first. If the resulting text is abnormally short
+        (e.g., less than 50 characters per page on average), it falls back to 'ocr'.
+        """
+        logger.info(f"Starting 'auto' extraction for {file_path}")
+        fast_result = PDFParserService.extract_fast_text(file_path)
+        
+        total_chars = sum(len(page['text']) for page in fast_result['pages'])
+        num_pages = len(fast_result['pages']) or 1
+        
+        avg_chars_per_page = total_chars / num_pages
+        
+        if avg_chars_per_page < 50:
+            logger.info(f"Auto-detection: Only {avg_chars_per_page:.1f} chars/page found. Falling back to OCR.")
+            res = PDFParserService.extract_ocr_text(file_path)
+            res["engine"] = "ocr"
+            return res
+            
+        logger.info(f"Auto-detection: Found {avg_chars_per_page:.1f} chars/page. Using Hybrid (Text + Tables).")
+        res = PDFParserService.extract_hybrid_text(file_path)
+        res["engine"] = "hybrid"
+        return res

@@ -231,14 +231,21 @@ def ingest_document(
     # ── Stage 1: Extract ────────────────────────────────────────────────
     logger.info(f"[{document_id}] Stage 1: Extracting with engine='{extraction_engine}'")
     t0 = time.time()
-    if extraction_engine == "fast":
+    if extraction_engine == "auto":
+        doc = PDFParserService.extract_auto_text(file_path)
+        extraction_engine_used = doc.get("engine", "auto")
+    elif extraction_engine == "fast":
         doc = PDFParserService.extract_fast_text(file_path)
+        extraction_engine_used = "fast"
     elif extraction_engine == "structural":
         doc = PDFParserService.extract_structural_text(file_path)
+        extraction_engine_used = "structural"
     elif extraction_engine == "ocr":
         doc = PDFParserService.extract_ocr_text(file_path)
+        extraction_engine_used = "ocr"
     else:
         doc = PDFParserService.extract_hybrid_text(file_path)
+        extraction_engine_used = "hybrid"
     stage_times["extract_sec"] = round(time.time() - t0, 4)
     logger.info(f"[{document_id}] Extraction done in {stage_times['extract_sec']}s")
 
@@ -278,7 +285,7 @@ def ingest_document(
             chunk_id=chunk_id,
             document_id=document_id,
             source_filename=source_filename,
-            extraction_engine=extraction_engine,
+            extraction_engine=extraction_engine_used,
             chunking_strategy=chunking_strategy,
             page_number=chunk.page_number,
             section_title=chunk.section_title,
@@ -322,7 +329,7 @@ def ingest_document(
     return {
         "document_id": document_id,
         "source_filename": source_filename,
-        "extraction_engine": extraction_engine,
+        "extraction_engine": extraction_engine_used,
         "chunking_strategy": chunking_strategy,
         "embedding_model": embedder.model_name,
         "chunks_created": len(chunks),

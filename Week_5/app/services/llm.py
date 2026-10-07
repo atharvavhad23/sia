@@ -18,6 +18,7 @@ import json
 import logging
 import requests
 from requests.adapters import HTTPAdapter
+# pyrefly: ignore [missing-import]
 from urllib3.util.retry import Retry
 from typing import List, Dict, Any, Generator
 
@@ -141,10 +142,13 @@ def generate_rag_answer_stream(
         logger.error(f"Gemini stream error: {e}", exc_info=True)
         is_overloaded = "timeout" in str(e).lower() or "connect" in type(e).__name__.lower() or "503" in str(e) or "429" in str(e)
         if is_overloaded:
-            yield "\n\n*(AI synthesis is currently rate-limited. Falling back to the most relevant document excerpt)*\n\n"
+            yield "\n\n*(AI synthesis is currently rate-limited. Falling back to the retrieved document excerpts)*\n\n"
             if retrieved_chunks:
-                fallback_text = retrieved_chunks[0].get("chunk_text", "").strip()
-                if not fallback_text:
+                fallback_text = ""
+                # Combine up to top 3 chunks for the fallback to ensure better context
+                for i, chunk in enumerate(retrieved_chunks[:3]):
+                    fallback_text += f"**Excerpt {i+1}:**\n{chunk.get('chunk_text', '').strip()}\n\n"
+                if not fallback_text.strip():
                     fallback_text = "No extractable text found in the retrieved documents."
             else:
                 fallback_text = "No relevant documents found to answer your query."

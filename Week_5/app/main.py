@@ -167,7 +167,7 @@ def system_metrics():
 
 @app.post("/api/v1/extract", tags=["Extraction Engine"], summary="Extract Content from PDF Document")
 async def extract_pdf(
-    engine: str = Form("hybrid", description="Processing pipeline: 'fast', 'structural', 'hybrid', or 'ocr'"),
+    engine: str = Form("auto", description="Processing pipeline: 'auto', 'fast', 'structural', 'hybrid', or 'ocr'"),
     output_format: str = Form("json", description="Response format: 'json' or 'markdown'"),
     file: UploadFile = File(..., description="The PDF document to be ingested and analyzed.")
 ):
@@ -183,8 +183,8 @@ async def extract_pdf(
         logger.warning(f"Invalid file type uploaded: {file.filename}")
         return JSONResponse(status_code=400, content={"success": False, "error": "Invalid File Type", "details": "Only .pdf files are supported."})
     
-    if engine not in ["fast", "structural", "hybrid", "ocr"]:
-        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid Engine", "details": "Engine must be 'fast', 'structural', 'hybrid', or 'ocr'."})
+    if engine not in ["auto", "fast", "structural", "hybrid", "ocr"]:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid Engine", "details": "Engine must be 'auto', 'fast', 'structural', 'hybrid', or 'ocr'."})
         
     if output_format not in ["json", "markdown"]:
         return JSONResponse(status_code=400, content={"success": False, "error": "Invalid Format", "details": "Output format must be 'json' or 'markdown'."})
@@ -253,7 +253,7 @@ async def extract_pdf(
     summary="Ingest a PDF into the RAG vector store",
 )
 async def ingest_pdf(
-    engine: str = Form("fast", description="Extraction engine: 'fast', 'structural', 'hybrid', 'ocr'"),
+    engine: str = Form("auto", description="Extraction engine: 'auto', 'fast', 'structural', 'hybrid', 'ocr'"),
     chunking_strategy: str = Form("recursive", description="Chunking strategy: 'fixed', 'recursive', 'semantic', 'layout_aware'"),
     embedding_model: str = Form("minilm", description="Embedding model: 'minilm', 'bge', 'e5'"),
     file: UploadFile = File(..., description="PDF to ingest into the vector store"),
@@ -270,8 +270,8 @@ async def ingest_pdf(
 
     if not file.filename.endswith(".pdf"):
         return JSONResponse(status_code=400, content={"success": False, "error": "Only .pdf files are supported."})
-    if engine not in ["fast", "structural", "hybrid", "ocr"]:
-        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid engine. Choose: fast, structural, hybrid, ocr."})
+    if engine not in ["auto", "fast", "structural", "hybrid", "ocr"]:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid engine. Choose: auto, fast, structural, hybrid, ocr."})
     if chunking_strategy not in ["fixed", "recursive", "semantic", "layout_aware"]:
         return JSONResponse(status_code=400, content={"success": False, "error": "Invalid chunking_strategy."})
     if embedding_model not in ["minilm", "bge", "e5"]:

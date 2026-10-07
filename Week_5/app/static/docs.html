@@ -521,13 +521,6 @@
           <option value="e5">e5-base-v2 🔬 768-dim Deep</option>
         </select>
 
-        <label class="form-label">Extraction Engine</label>
-        <select class="select-input" id="ingest-engine">
-          <option value="fast" selected>fast — PyMuPDF (C Speed)</option>
-          <option value="structural">structural — pdfplumber Layout</option>
-          <option value="hybrid">hybrid — Camelot Tables</option>
-          <option value="ocr">ocr — Pytesseract (Scans & Images)</option>
-        </select>
 
         <button class="btn-primary" id="btn-ingest" onclick="triggerIngest()">
           <span>📥</span> Ingest & Vectorize
@@ -851,7 +844,7 @@
     form.append('file', file);
     form.append('chunking_strategy', document.getElementById('ingest-strategy').value);
     form.append('embedding_model', document.getElementById('ingest-model').value);
-    form.append('engine', document.getElementById('ingest-engine').value);
+    form.append('engine', 'auto');
 
     try {
       const res = await fetch('/api/v1/ingest', { method: 'POST', body: form });
@@ -864,7 +857,10 @@
         });
         const d = json.data;
         document.getElementById('db-status-text').textContent = `${d.total_vectors_in_store} chunks indexed`;
-        appendSystemMessage(`✅ **${d.source_filename}** ingested — ${d.chunks_created} chunks in ${d.total_pipeline_time_sec}s. You can now ask questions!`);
+        const engineDisplay = d.extraction_engine === 'ocr' ? 'OCR (Images & Scans)' : 
+                              d.extraction_engine === 'hybrid' ? 'Hybrid (Text & Tables)' : 
+                              d.extraction_engine === 'structural' ? 'Structural (Layout)' : 'Fast (Text)';
+        appendSystemMessage(`✅ **${d.source_filename}** ingested — Detected: **${engineDisplay}**. Created ${d.chunks_created} chunks in ${d.total_pipeline_time_sec}s. You can now ask questions!`);
       } else {
         appendSystemMessage(`❌ Ingest failed: ${json.error || 'Unknown error'}`);
       }
