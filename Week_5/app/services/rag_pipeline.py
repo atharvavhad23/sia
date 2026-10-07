@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import uuid
+# pyrefly: ignore [missing-import]
 import lancedb
 import pyarrow as pa
 import numpy as np
@@ -507,6 +508,7 @@ def _extract_answer_snippets(
     This gives a focused extractive answer without needing an LLM.
     """
     import re
+    # pyrefly: ignore [missing-import]
     import numpy as np
 
     # Embed the query once (already normalized by embedder)
